@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"io/fs"
 	"net/http"
 
@@ -25,9 +26,15 @@ func New(st *store.Store, rootDir string, frontendFS fs.FS) http.Handler {
 	// Serve frontend
 	fileServer := http.FileServer(http.FS(frontendFS))
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = "/index.html"
-		fileServer.ServeHTTP(w, r)
+	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		f, err := frontendFS.Open("index.html")
+		if err != nil {
+			http.Error(w, "index.html not found", http.StatusNotFound)
+			return
+		}
+		defer f.Close()
+		stat, _ := f.Stat()
+		http.ServeContent(w, req, "index.html", stat.ModTime(), f.(io.ReadSeeker))
 	})
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 

@@ -37,6 +37,7 @@ func New(st *store.Store, rootDir string, frontendFS fs.FS) http.Handler {
 	r.Post("/api/annotations", h.handleSetAnnotation)
 	r.Delete("/api/annotations", h.handleDeleteAnnotation)
 	r.Get("/api/git-status", h.handleGitStatus)
+	r.Get("/api/chroma.css", h.handleChromaCSS)
 
 	return r
 }

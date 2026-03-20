@@ -9,6 +9,18 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 )
 
+// CSS returns the Chroma CSS classes for the GitHub style.
+func CSS() string {
+	style := styles.Get("github")
+	if style == nil {
+		style = styles.Fallback
+	}
+	formatter := html.New(html.WithClasses(true))
+	var buf bytes.Buffer
+	formatter.WriteCSS(&buf, style)
+	return buf.String()
+}
+
 // Result contains the highlighted HTML and detected language.
 type Result struct {
 	HTML     string `json:"html"`

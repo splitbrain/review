@@ -25,9 +25,8 @@ func New(st *store.Store, rootDir string, frontendFS fs.FS) http.Handler {
 	// Serve frontend
 	fileServer := http.FileServer(http.FS(frontendFS))
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = "/index.html"
-		fileServer.ServeHTTP(w, r)
+	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		http.ServeFileFS(w, req, frontendFS, "index.html")
 	})
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 

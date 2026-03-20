@@ -1,0 +1,338 @@
+/* Code Review Tool - Main Stylesheet */
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Layout */
+.app-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* File Tree */
+.file-tree {
+  border-right: 1px solid var(--pico-border);
+  overflow-y: auto;
+  padding: 0.5rem 0;
+  background: var(--pico-card-bg);
+}
+
+.file-tree-header {
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted);
+  border-bottom: 1px solid var(--pico-border);
+  margin-bottom: 0.25rem;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  user-select: none;
+  border-radius: 0;
+  transition: background 0.1s;
+}
+
+.tree-item:hover {
+  background: var(--pico-border);
+}
+
+.tree-item.active {
+  background: var(--pico-primary);
+  color: #fff;
+}
+
+.tree-item svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 0.4rem;
+  flex-shrink: 0;
+}
+
+.tree-item .chevron {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.2rem;
+  transition: transform 0.15s;
+}
+
+.tree-item .chevron.open {
+  transform: rotate(90deg);
+}
+
+.tree-children {
+  display: none;
+}
+
+.tree-children.open {
+  display: block;
+}
+
+.tree-item .comment-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pico-primary);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Code View */
+.code-view {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--pico-border);
+  background: var(--pico-card-bg);
+  font-size: 0.85rem;
+  min-height: 40px;
+}
+
+.code-header .file-path {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-weight: 500;
+}
+
+.code-header .lang-badge {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  background: var(--pico-border);
+  border-radius: 1rem;
+  color: var(--pico-muted);
+}
+
+.code-content {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.code-content pre {
+  margin: 0;
+  padding: 0.5rem 0;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 4;
+}
+
+/* Chroma styles */
+.code-content .chroma {
+  background: transparent !important;
+}
+
+.code-content .chroma .lnt,
+.code-content .chroma .ln {
+  color: var(--pico-muted);
+  opacity: 0.6;
+  user-select: none;
+  padding-right: 1rem;
+  text-align: right;
+  min-width: 3rem;
+  display: inline-block;
+}
+
+.code-content .chroma .line {
+  display: inline-block;
+  width: 100%;
+  padding: 0 1rem 0 0;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.code-content .chroma .line:hover {
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.code-content .chroma .line.has-comment {
+  border-left-color: var(--pico-primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.code-content .chroma .line.has-comment:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.code-content .chroma .line.selected {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--pico-muted);
+  text-align: center;
+  padding: 2rem;
+}
+
+.empty-state svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+}
+
+/* Comment Panel */
+.comment-panel {
+  border-left: 1px solid var(--pico-border);
+  overflow-y: auto;
+  background: var(--pico-card-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-panel-header {
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted);
+  border-bottom: 1px solid var(--pico-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comment-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.comment-item {
+  padding: 0.6rem;
+  margin-bottom: 0.4rem;
+  border-radius: var(--pico-radius);
+  background: var(--pico-bg);
+  border: 1px solid var(--pico-border);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.comment-item:hover {
+  border-color: var(--pico-primary);
+}
+
+.comment-item .comment-line {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pico-primary);
+  margin-bottom: 0.25rem;
+}
+
+.comment-item .comment-text {
+  font-size: 0.85rem;
+  color: var(--pico-color);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Comment Editor */
+.comment-editor {
+  padding: 0.75rem;
+  border-top: 1px solid var(--pico-border);
+  background: var(--pico-bg);
+}
+
+.comment-editor .editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.comment-editor .editor-header span {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--pico-primary);
+}
+
+.comment-editor textarea {
+  min-height: 80px;
+  margin-bottom: 0.5rem;
+}
+
+.comment-editor .editor-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.comment-editor .editor-actions button {
+  flex: 1;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.75rem;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 1rem;
+  border-top: 1px solid var(--pico-border);
+  background: var(--pico-card-bg);
+  font-size: 0.75rem;
+  color: var(--pico-muted);
+}
+
+/* Loading */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--pico-muted);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--pico-border);
+  border-top-color: var(--pico-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 0.5rem;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+  }
+  .file-tree {
+    display: none;
+  }
+  .comment-panel {
+    display: none;
+  }
+}

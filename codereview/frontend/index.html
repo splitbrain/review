@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Review</title>
+  <link rel="stylesheet" href="/static/vendor/pico.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- SVG Icons -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+    </symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </symbol>
+    <symbol id="icon-folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 19a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 3h9a2 2 0 0 1 2 2v1"/><path d="M5 19h14a2 2 0 0 0 2-2l1-7H8l-3 9z"/>
+    </symbol>
+    <symbol id="icon-comment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </symbol>
+    <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9 18 15 12 9 6"/>
+    </symbol>
+  </svg>
+
+  <div class="app-layout">
+    <!-- File Tree -->
+    <nav class="file-tree">
+      <div class="file-tree-header">Files</div>
+      <div id="tree-container"></div>
+    </nav>
+
+    <!-- Code View -->
+    <main class="code-view">
+      <div id="code-header" class="code-header">
+        <span class="file-path">Select a file to review</span>
+      </div>
+      <div id="code-content" class="code-content">
+        <div class="empty-state">
+          <svg style="width:48px;height:48px;opacity:0.4"><use href="#icon-comment"/></svg>
+          <p>Select a file from the tree to start reviewing.</p>
+          <small>Click on any line to add a comment.</small>
+        </div>
+      </div>
+    </main>
+
+    <!-- Comment Panel -->
+    <aside class="comment-panel">
+      <div class="comment-panel-header">
+        <span>Comments</span>
+      </div>
+      <div id="comment-list" class="comment-list">
+        <div class="empty-state" style="padding:2rem">
+          <small>No file selected.</small>
+        </div>
+      </div>
+      <div id="comment-editor" class="comment-editor" style="display:none">
+        <div class="editor-header">
+          <span id="editor-line-label">Line ?</span>
+          <button class="secondary" onclick="app.cancelEdit()" style="padding:0.2rem 0.5rem;font-size:0.75rem">Cancel</button>
+        </div>
+        <textarea id="editor-textarea" placeholder="Write your review comment..." rows="3"></textarea>
+        <div class="editor-actions">
+          <button onclick="app.saveComment()">Save</button>
+          <button class="contrast" onclick="app.deleteComment()">Delete</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Status Bar -->
+  <footer class="status-bar">
+    <span id="status-md-path">review.md</span>
+    <span id="status-comment-count">0 comments</span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

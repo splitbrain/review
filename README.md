@@ -1,6 +1,8 @@
 # review
 
-A lightweight, self-contained web-based code review tool. Browse a project's source files, add inline annotations to specific lines, and have everything persisted to a human-readable `REVIEW.md` markdown file.
+A lightweight, self-contained web-based code review tool. Browse a project's source files, add inline annotations to specific lines, and have everything persisted to a `REVIEW.md` markdown file.
+
+The tool was vibecoded as a simple way to review agentic coded files. The markdown file created by this tool can be fed back to your coding agent.
 
 ## Features
 
@@ -19,6 +21,12 @@ Requires **Go 1.24+**.
 go build -o review .
 ```
 
+or
+
+```sh
+make
+```
+
 ## Usage
 
 ```sh
@@ -29,7 +37,7 @@ go build -o review .
 ./review -dir /path/to/project -port 8080
 ```
 
-Then open `http://localhost:7070` (or your chosen port) in a browser.
+Then open `http://localhost:7070` (or your chosen port) in a browser (should happen automatically).
 
 ### Flags
 

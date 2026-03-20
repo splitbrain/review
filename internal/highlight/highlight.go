@@ -44,6 +44,7 @@ func Highlight(filename, content string) Result {
 		html.WithLineNumbers(true),
 		html.WithLinkableLineNumbers(true, "L"),
 		html.WithClasses(true),
+		html.WrapLongLines(true),
 	)
 
 	style := styles.Get("github")

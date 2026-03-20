@@ -155,11 +155,17 @@ body {
 }
 
 .code-content .chroma .line {
-  display: block;
+  display: flex;
   padding: 0 1rem 0 0;
   cursor: pointer;
   border-left: 3px solid transparent;
   transition: background 0.1s;
+}
+
+.code-content .chroma .cl {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .code-content .chroma .line:hover {

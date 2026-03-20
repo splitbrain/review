@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Store holds annotations in memory and persists them to review.md.
+// Store holds annotations in memory and persists them to REVIEW.md.
 type Store struct {
 	mdPath  string
 	srcRoot string
@@ -15,7 +15,7 @@ type Store struct {
 	mu      sync.RWMutex
 }
 
-// Load reads the review.md file (if it exists) and returns a ready Store.
+// Load reads the REVIEW.md file (if it exists) and returns a ready Store.
 func Load(mdPath, srcRoot string) (*Store, error) {
 	abs, err := filepath.Abs(mdPath)
 	if err != nil {
@@ -28,7 +28,7 @@ func Load(mdPath, srcRoot string) (*Store, error) {
 
 	data, err := parse(abs)
 	if err != nil {
-		return nil, fmt.Errorf("parse review.md: %w", err)
+		return nil, fmt.Errorf("parse REVIEW.md: %w", err)
 	}
 
 	return &Store{
@@ -96,12 +96,12 @@ func (s *Store) All() map[string]map[int]string {
 	return cp
 }
 
-// MdPath returns the absolute path to the review.md file.
+// MdPath returns the absolute path to the REVIEW.md file.
 func (s *Store) MdPath() string {
 	return s.mdPath
 }
 
-// flush serialises the map and atomically writes review.md.
+// flush serialises the map and atomically writes REVIEW.md.
 func (s *Store) flush() error {
 	content := serialize(s.data, s.srcRoot)
 	tmp := s.mdPath + ".tmp"
@@ -110,7 +110,7 @@ func (s *Store) flush() error {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 	if err := os.Rename(tmp, s.mdPath); err != nil {
-		return fmt.Errorf("rename to review.md: %w", err)
+		return fmt.Errorf("rename to REVIEW.md: %w", err)
 	}
 	return nil
 }

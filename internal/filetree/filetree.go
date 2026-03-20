@@ -57,8 +57,8 @@ func walkDir(absDir, relDir string) ([]*Entry, error) {
 			continue
 		}
 
-		// Skip review.md
-		if name == "review.md" {
+		// Skip REVIEW.md
+		if name == "REVIEW.md" {
 			continue
 		}
 

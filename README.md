@@ -1,6 +1,6 @@
 # review
 
-A lightweight, self-contained web-based code review tool. Browse a project's source files, add inline annotations to specific lines, and have everything persisted to a human-readable `review.md` markdown file.
+A lightweight, self-contained web-based code review tool. Browse a project's source files, add inline annotations to specific lines, and have everything persisted to a human-readable `REVIEW.md` markdown file.
 
 ## Features
 
@@ -8,7 +8,7 @@ A lightweight, self-contained web-based code review tool. Browse a project's sou
 - **Inline annotations** — click any line to add, edit, or delete review comments
 - **Syntax highlighting** — powered by [Chroma](https://github.com/alecthomas/chroma)
 - **Git status integration** — files and directories are color-coded by git status (modified, staged, untracked, etc.)
-- **Markdown storage** — all annotations are saved to `review.md` with surrounding code context, making them easy to read and share without the tool
+- **Markdown storage** — all annotations are saved to `REVIEW.md` with surrounding code context, making them easy to read and share without the tool
 - **Single binary** — the web frontend is embedded in the Go binary; no external files or dependencies needed at runtime
 
 ## Building
@@ -46,7 +46,7 @@ The tool serves a three-panel web UI:
 2. **Code viewer** (center) — syntax-highlighted source with clickable lines
 3. **Comment sidebar** (right) — list of annotations for the current file and an editor
 
-Annotations are stored in memory and flushed to `review.md` in the project root on every change. The markdown file groups comments by file and includes a few lines of code context around each annotated line, so it remains useful on its own.
+Annotations are stored in memory and flushed to `REVIEW.md` in the project root on every change. The markdown file groups comments by file and includes a few lines of code context around each annotated line, so it remains useful on its own.
 
 ## API
 

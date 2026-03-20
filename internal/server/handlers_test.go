@@ -41,7 +41,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, string, func()) {
 		t.Fatal(err)
 	}
 
-	mdPath := filepath.Join(tmpDir, "review.md")
+	mdPath := filepath.Join(tmpDir, "REVIEW.md")
 	st, err := store.Load(mdPath, tmpDir)
 	if err != nil {
 		t.Fatal(err)

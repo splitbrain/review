@@ -28,7 +28,7 @@ func main() {
 		log.Fatalf("Failed to resolve directory: %v", err)
 	}
 
-	mdPath := filepath.Join(rootDir, "review.md")
+	mdPath := filepath.Join(rootDir, "REVIEW.md")
 	st, err := store.Load(mdPath, rootDir)
 	if err != nil {
 		log.Fatalf("Failed to load review data: %v", err)

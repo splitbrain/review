@@ -13,7 +13,7 @@ var (
 	lineHeaderRe = regexp.MustCompile(`^#### Line (\d+)$`)
 )
 
-// parse reads a review.md file and returns the annotation map.
+// parse reads a REVIEW.md file and returns the annotation map.
 func parse(path string) (map[string]map[int]string, error) {
 	f, err := os.Open(path)
 	if err != nil {

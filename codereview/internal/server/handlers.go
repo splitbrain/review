@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"codereview/internal/filetree"
+	"codereview/internal/gitstatus"
 	"codereview/internal/highlight"
 	"codereview/internal/store"
 )
@@ -115,6 +116,21 @@ func (h *handlers) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 
 	w.WriteHeader(http.StatusOK)
 	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+func (h *handlers) handleGitStatus(w http.ResponseWriter, r *http.Request) {
+	statuses := gitstatus.Get(h.rootDir)
+	if statuses == nil {
+		// Not a git repo — return empty object
+		jsonResponse(w, map[string]string{})
+		return
+	}
+	// Convert to string→string for JSON
+	result := make(map[string]string, len(statuses))
+	for path, status := range statuses {
+		result[path] = string(status)
+	}
+	jsonResponse(w, result)
 }
 
 func jsonResponse(w http.ResponseWriter, data interface{}) {

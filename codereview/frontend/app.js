@@ -13,6 +13,7 @@
     editingLine: null,
     editingText: '',
     loading: false,
+    gitStatuses: {},     // path → status string (modified, staged, untracked, added, deleted, conflict)
   };
 
   // DOM references
@@ -33,6 +34,7 @@
 
     loadTree();
     loadAllAnnotations();
+    loadGitStatus();
   });
 
   // API helpers
@@ -70,6 +72,38 @@
     }
   }
 
+  // Load git status
+  async function loadGitStatus() {
+    try {
+      state.gitStatuses = await api('GET', '/api/git-status');
+      renderTree();
+    } catch (e) {
+      console.error('Failed to load git status:', e);
+    }
+  }
+
+  // Get git status for a file path
+  function getGitStatus(path) {
+    return state.gitStatuses[path] || '';
+  }
+
+  // Get aggregate git status for a directory (most important child status)
+  function getDirGitStatus(entry) {
+    if (!entry.isDir) return getGitStatus(entry.path);
+    if (!entry.children) return '';
+    const priorities = { conflict: 5, modified: 4, untracked: 3, added: 2, staged: 1, deleted: 4 };
+    let best = '';
+    let bestPri = 0;
+    for (const child of entry.children) {
+      const s = getDirGitStatus(child);
+      if (s && (priorities[s] || 0) > bestPri) {
+        best = s;
+        bestPri = priorities[s] || 0;
+      }
+    }
+    return best;
+  }
+
   // Render file tree
   function renderTree() {
     treeContainer.innerHTML = '';
@@ -84,6 +118,9 @@
 
       if (entry.isDir) {
         const isOpen = state.openDirs[entry.path] || false;
+        const dirStatus = getDirGitStatus(entry);
+        if (dirStatus) item.classList.add('git-' + dirStatus);
+
         item.innerHTML = `
           <svg class="chevron ${isOpen ? 'open' : ''}"><use href="/static/assets/icons.svg#icon-chevron-right"/></svg>
           <svg><use href="/static/assets/icons.svg#icon-folder${isOpen ? '-open' : ''}"/></svg>
@@ -111,6 +148,9 @@
       } else {
         const hasComments = state.allAnnotations[entry.path] &&
                            Object.keys(state.allAnnotations[entry.path]).length > 0;
+        const fileStatus = getGitStatus(entry.path);
+        if (fileStatus) item.classList.add('git-' + fileStatus);
+
         item.innerHTML = `
           <svg><use href="/static/assets/icons.svg#icon-file"/></svg>
           <span>${escapeHtml(entry.name)}</span>

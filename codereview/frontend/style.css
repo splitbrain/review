@@ -324,6 +324,53 @@ body {
   margin-right: 0.5rem;
 }
 
+/* Git Status Colors */
+.tree-item.git-modified > span:not(.comment-dot),
+.tree-item.git-modified > svg:not(.chevron) {
+  color: #d97706; /* amber/orange for modified */
+}
+
+.tree-item.git-staged > span:not(.comment-dot),
+.tree-item.git-staged > svg:not(.chevron) {
+  color: #16a34a; /* green for staged */
+}
+
+.tree-item.git-added > span:not(.comment-dot),
+.tree-item.git-added > svg:not(.chevron) {
+  color: #16a34a; /* green for new staged files */
+}
+
+.tree-item.git-untracked > span:not(.comment-dot),
+.tree-item.git-untracked > svg:not(.chevron) {
+  color: #6b7280; /* grey for untracked */
+}
+
+.tree-item.git-deleted > span:not(.comment-dot),
+.tree-item.git-deleted > svg:not(.chevron) {
+  color: #dc2626; /* red for deleted */
+}
+
+.tree-item.git-conflict > span:not(.comment-dot),
+.tree-item.git-conflict > svg:not(.chevron) {
+  color: #dc2626; /* red for conflicts */
+}
+
+/* Keep active item readable */
+.tree-item.active.git-modified > span:not(.comment-dot),
+.tree-item.active.git-modified > svg:not(.chevron),
+.tree-item.active.git-staged > span:not(.comment-dot),
+.tree-item.active.git-staged > svg:not(.chevron),
+.tree-item.active.git-added > span:not(.comment-dot),
+.tree-item.active.git-added > svg:not(.chevron),
+.tree-item.active.git-untracked > span:not(.comment-dot),
+.tree-item.active.git-untracked > svg:not(.chevron),
+.tree-item.active.git-deleted > span:not(.comment-dot),
+.tree-item.active.git-deleted > svg:not(.chevron),
+.tree-item.active.git-conflict > span:not(.comment-dot),
+.tree-item.active.git-conflict > svg:not(.chevron) {
+  color: #fff;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .app-layout {

@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 
-	"codereview/internal/store"
+	"review/internal/store"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"

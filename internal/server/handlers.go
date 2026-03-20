@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codereview/internal/filetree"
-	"codereview/internal/gitstatus"
-	"codereview/internal/highlight"
-	"codereview/internal/store"
+	"review/internal/filetree"
+	"review/internal/gitstatus"
+	"review/internal/highlight"
+	"review/internal/store"
 )
 
 type handlers struct {

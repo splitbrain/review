@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"codereview/internal/server"
-	"codereview/internal/store"
+	"review/internal/server"
+	"review/internal/store"
 )
 
 //go:embed all:frontend

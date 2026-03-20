@@ -131,6 +131,11 @@ func (h *handlers) handleGitStatus(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, result)
 }
 
+func (h *handlers) handleChromaCSS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/css")
+	w.Write([]byte(highlight.CSS()))
+}
+
 func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)

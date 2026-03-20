@@ -93,7 +93,6 @@ func (h *handlers) handleSetAnnotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
@@ -114,7 +113,6 @@ func (h *handlers) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 

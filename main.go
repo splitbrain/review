@@ -7,7 +7,9 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"review/internal/server"
 	"review/internal/store"
@@ -40,11 +42,32 @@ func main() {
 	handler := server.New(st, rootDir, subFS)
 
 	addr := fmt.Sprintf(":%d", *port)
-	fmt.Printf("Code Review running at http://localhost%s\n", addr)
+	url := fmt.Sprintf("http://localhost:%d", *port)
+	fmt.Printf("Code Review running at %s\n", url)
 	fmt.Printf("Reviewing: %s\n", rootDir)
 	fmt.Printf("Annotations: %s\n", st.MdPath())
+
+	go openBrowser(url)
 
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+func openBrowser(url string) {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+	case "windows":
+		cmd = "rundll32"
+		args = []string{"url.dll,FileProtocolHandler"}
+	default:
+		cmd = "xdg-open"
+	}
+
+	args = append(args, url)
+	exec.Command(cmd, args...).Start()
 }

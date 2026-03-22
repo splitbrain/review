@@ -13,6 +13,7 @@ import (
 
 	"review/internal/server"
 	"review/internal/store"
+	"review/internal/watcher"
 )
 
 //go:embed all:frontend
@@ -34,12 +35,50 @@ func main() {
 		log.Fatalf("Failed to load review data: %v", err)
 	}
 
+	// Run initial drift check on all annotated files
+	if drifted := st.CheckAllDrift(); len(drifted) > 0 {
+		for f := range drifted {
+			log.Printf("Drift detected in %s — annotations adjusted", f)
+		}
+	}
+
 	subFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
 		log.Fatalf("Failed to create sub filesystem: %v", err)
 	}
 
-	handler := server.New(st, rootDir, subFS)
+	// Set up WebSocket hub
+	hub := server.NewHub()
+	go hub.Run()
+
+	// Set up file watcher
+	w, err := watcher.New(st)
+	if err != nil {
+		log.Printf("Warning: file watching disabled: %v", err)
+	} else {
+		w.Start()
+		defer w.Stop()
+
+		// Bridge watcher events to WebSocket hub
+		go func() {
+			for ev := range w.Events() {
+				// Build message with current annotation state
+				msg := map[string]interface{}{
+					"type": ev.Type,
+				}
+				if ev.Path != "" {
+					msg["path"] = ev.Path
+					msg["annotations"] = annotationsToResponse(st.GetFile(ev.Path))
+				}
+				if ev.Type == "review-reloaded" {
+					msg["allAnnotations"] = allAnnotationsToResponse(st.All())
+				}
+				hub.Broadcast(msg)
+			}
+		}()
+	}
+
+	handler := server.New(st, rootDir, subFS, hub)
 
 	addr := fmt.Sprintf(":%d", *port)
 	url := fmt.Sprintf("http://localhost:%d", *port)
@@ -52,6 +91,27 @@ func main() {
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+// annotationsToResponse converts store annotations to the API response format.
+func annotationsToResponse(anns map[int]*store.Annotation) map[string]map[string]interface{} {
+	result := make(map[string]map[string]interface{}, len(anns))
+	for line, ann := range anns {
+		result[fmt.Sprintf("%d", line)] = map[string]interface{}{
+			"comment":  ann.Comment,
+			"outdated": ann.Outdated,
+		}
+	}
+	return result
+}
+
+// allAnnotationsToResponse converts all store annotations to the API response format.
+func allAnnotationsToResponse(all map[string]map[int]*store.Annotation) map[string]map[string]map[string]interface{} {
+	result := make(map[string]map[string]map[string]interface{}, len(all))
+	for file, anns := range all {
+		result[file] = annotationsToResponse(anns)
+	}
+	return result
 }
 
 func openBrowser(url string) {

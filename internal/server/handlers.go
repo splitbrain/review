@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"review/internal/filetree"
@@ -52,14 +53,40 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, result)
 }
 
+// annotationResponse is the JSON shape for a single annotation.
+type annotationResponse struct {
+	Comment  string `json:"comment"`
+	Outdated bool   `json:"outdated"`
+}
+
 func (h *handlers) handleGetAnnotations(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		// Return all annotations
-		jsonResponse(w, h.store.All())
+		all := h.store.All()
+		result := make(map[string]map[string]annotationResponse, len(all))
+		for file, lines := range all {
+			fileAnns := make(map[string]annotationResponse, len(lines))
+			for line, ann := range lines {
+				fileAnns[strconv.Itoa(line)] = annotationResponse{
+					Comment:  ann.Comment,
+					Outdated: ann.Outdated,
+				}
+			}
+			result[file] = fileAnns
+		}
+		jsonResponse(w, result)
 		return
 	}
-	jsonResponse(w, h.store.GetFile(path))
+	fileAnns := h.store.GetFile(path)
+	result := make(map[string]annotationResponse, len(fileAnns))
+	for line, ann := range fileAnns {
+		result[strconv.Itoa(line)] = annotationResponse{
+			Comment:  ann.Comment,
+			Outdated: ann.Outdated,
+		}
+	}
+	jsonResponse(w, result)
 }
 
 type annotationRequest struct {

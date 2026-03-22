@@ -12,7 +12,8 @@ import (
 
 // New creates and returns the HTTP handler.
 // frontendFS should be the embedded frontend filesystem (already sub'd to the frontend root).
-func New(st *store.Store, rootDir string, frontendFS fs.FS) http.Handler {
+// hub may be nil if WebSocket support is not needed.
+func New(st *store.Store, rootDir string, frontendFS fs.FS, hub *Hub) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -38,6 +39,11 @@ func New(st *store.Store, rootDir string, frontendFS fs.FS) http.Handler {
 	r.Delete("/api/annotations", h.handleDeleteAnnotation)
 	r.Get("/api/git-status", h.handleGitStatus)
 	r.Get("/api/chroma.css", h.handleChromaCSS)
+
+	// WebSocket
+	if hub != nil {
+		r.Get("/ws", hub.HandleWebSocket)
+	}
 
 	return r
 }

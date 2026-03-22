@@ -47,7 +47,6 @@ func setupTestServer(t *testing.T) (*httptest.Server, string, func()) {
 		t.Fatal(err)
 	}
 
-	handler := New(st, tmpDir, os.DirFS(filepath.Join(tmpDir, "__frontend_placeholder__")))
 	// We don't have a real frontend FS for tests, so create a minimal one
 	frontendDir := filepath.Join(tmpDir, "frontend")
 	if err := os.MkdirAll(frontendDir, 0755); err != nil {
@@ -57,7 +56,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, string, func()) {
 		t.Fatal(err)
 	}
 
-	handler = New(st, tmpDir, os.DirFS(frontendDir))
+	handler := New(st, tmpDir, os.DirFS(frontendDir), nil)
 	ts := httptest.NewServer(handler)
 
 	return ts, tmpDir, func() {
@@ -183,17 +182,12 @@ func TestFileEndpoint_MultilineContent(t *testing.T) {
 		t.Fatal("expected non-empty html field")
 	}
 
-	// The file has 50 lines. Verify that the HTML contains line references
-	// for multiple lines (not just the first line).
-	// Chroma generates line numbers as <span class="lnt">N</span> or similar.
-	// Check that we have at least lines up to 10.
 	for _, lineNum := range []string{"10", "20", "30", "40", "50"} {
 		if !strings.Contains(html, lineNum) {
 			t.Errorf("HTML should contain line number %s for a 50-line file, but it doesn't", lineNum)
 		}
 	}
 
-	// Verify that content from multiple lines appears in the HTML
 	if !strings.Contains(html, "line") {
 		t.Error("HTML should contain the word 'line' from file content")
 	}
@@ -220,7 +214,6 @@ func TestFileEndpoint_SubdirFile(t *testing.T) {
 	}
 
 	html := result["html"].(string)
-	// Should contain content from the file
 	if !strings.Contains(html, "Add") {
 		t.Error("expected HTML to contain function name 'Add'")
 	}
@@ -272,6 +265,12 @@ func TestFileEndpoint_NonexistentFile(t *testing.T) {
 }
 
 // ---- /api/annotations tests ----
+
+// annotationObj is the new response shape: {comment, outdated}
+type annotationObj struct {
+	Comment  string `json:"comment"`
+	Outdated bool   `json:"outdated"`
+}
 
 func TestAnnotations_GetEmpty(t *testing.T) {
 	ts, _, cleanup := setupTestServer(t)
@@ -327,13 +326,16 @@ func TestAnnotations_SetAndGet(t *testing.T) {
 	}
 	defer resp2.Body.Close()
 
-	var annots map[string]string
+	var annots map[string]annotationObj
 	if err := json.NewDecoder(resp2.Body).Decode(&annots); err != nil {
 		t.Fatalf("failed to decode annotations: %v", err)
 	}
 
-	if annots["3"] != "This is the main function" {
+	if annots["3"].Comment != "This is the main function" {
 		t.Errorf("expected annotation on line 3, got %v", annots)
+	}
+	if annots["3"].Outdated {
+		t.Error("expected annotation to not be outdated")
 	}
 
 	// Get all annotations
@@ -382,7 +384,7 @@ func TestAnnotations_SetMultipleAndGetAll(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var allAnnots map[string]map[string]string
+	var allAnnots map[string]map[string]annotationObj
 	if err := json.NewDecoder(resp.Body).Decode(&allAnnots); err != nil {
 		t.Fatalf("failed to decode all annotations: %v", err)
 	}
@@ -423,12 +425,12 @@ func TestAnnotations_Update(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var annots map[string]string
+	var annots map[string]annotationObj
 	if err := json.NewDecoder(resp.Body).Decode(&annots); err != nil {
 		t.Fatalf("failed to decode annotations: %v", err)
 	}
 
-	if annots["3"] != "Updated comment" {
+	if annots["3"].Comment != "Updated comment" {
 		t.Errorf("expected updated comment, got %v", annots)
 	}
 }
@@ -476,7 +478,7 @@ func TestAnnotations_Delete(t *testing.T) {
 	}
 	defer resp2.Body.Close()
 
-	var annots map[string]string
+	var annots map[string]annotationObj
 	if err := json.NewDecoder(resp2.Body).Decode(&annots); err != nil {
 		t.Fatalf("failed to decode annotations: %v", err)
 	}
@@ -654,7 +656,7 @@ func TestAnnotations_GetForFile_Empty(t *testing.T) {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
-	var annots map[string]string
+	var annots map[string]annotationObj
 	if err := json.NewDecoder(resp.Body).Decode(&annots); err != nil {
 		t.Fatalf("failed to decode: %v", err)
 	}

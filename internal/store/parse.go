@@ -10,36 +10,56 @@ import (
 
 var (
 	fileHeaderRe = regexp.MustCompile("^## `(.+)`$")
-	lineHeaderRe = regexp.MustCompile(`^#### Line (\d+)$`)
+	lineHeaderRe = regexp.MustCompile(`^#### Line (\d+)(.*)$`)
+	contextLineRe = regexp.MustCompile(`^(\d+): (.*)$`)
 )
 
 // parse reads a REVIEW.md file and returns the annotation map.
-func parse(path string) (map[string]map[int]string, error) {
+func parse(path string) (map[string]map[int]*Annotation, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]map[int]string), nil
+			return make(map[string]map[int]*Annotation), nil
 		}
 		return nil, err
 	}
 	defer f.Close()
 
-	data := make(map[string]map[int]string)
+	data := make(map[string]map[int]*Annotation)
 
 	type state int
 	const (
 		idle state = iota
 		inFile
 		inComment
-		skipFence
+		inFence
 	)
 
 	var (
 		st          state
 		currentFile string
 		currentLine int
+		outdated    bool
 		commentBuf  strings.Builder
+		contextLines []string
+		contextFrom  int
 	)
+
+	saveAnnotation := func() {
+		if commentBuf.Len() > 0 {
+			a := &Annotation{
+				Comment:     strings.TrimSpace(commentBuf.String()),
+				Context:     contextLines,
+				ContextFrom: contextFrom,
+				Outdated:    outdated,
+			}
+			data[currentFile][currentLine] = a
+		}
+		commentBuf.Reset()
+		contextLines = nil
+		contextFrom = 0
+		outdated = false
+	}
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -50,7 +70,7 @@ func parse(path string) (map[string]map[int]string, error) {
 			if m := fileHeaderRe.FindStringSubmatch(line); m != nil {
 				currentFile = m[1]
 				if data[currentFile] == nil {
-					data[currentFile] = make(map[int]string)
+					data[currentFile] = make(map[int]*Annotation)
 				}
 				st = inFile
 			}
@@ -59,14 +79,17 @@ func parse(path string) (map[string]map[int]string, error) {
 			if m := lineHeaderRe.FindStringSubmatch(line); m != nil {
 				n, _ := strconv.Atoi(m[1])
 				currentLine = n
+				outdated = strings.Contains(m[2], "outdated")
 				commentBuf.Reset()
+				contextLines = nil
+				contextFrom = 0
 				st = inComment
 			} else if strings.TrimSpace(line) == "---" {
 				st = idle
 			} else if m := fileHeaderRe.FindStringSubmatch(line); m != nil {
 				currentFile = m[1]
 				if data[currentFile] == nil {
-					data[currentFile] = make(map[int]string)
+					data[currentFile] = make(map[int]*Annotation)
 				}
 			}
 
@@ -79,44 +102,32 @@ func parse(path string) (map[string]map[int]string, error) {
 				continue
 			}
 			if strings.HasPrefix(trimmed, "```") {
-				// If we have collected comment text, this is the code fence — skip it
+				// If we have collected comment text, this is the code fence — capture it
 				if commentBuf.Len() > 0 {
-					comment := strings.TrimSpace(commentBuf.String())
-					data[currentFile][currentLine] = comment
-					st = skipFence
+					st = inFence
 				}
 				continue
 			}
 			// Check if we hit a new line header before any fence
 			if m := lineHeaderRe.FindStringSubmatch(line); m != nil {
-				// Save current comment
-				if commentBuf.Len() > 0 {
-					comment := strings.TrimSpace(commentBuf.String())
-					data[currentFile][currentLine] = comment
-				}
+				saveAnnotation()
 				n, _ := strconv.Atoi(m[1])
 				currentLine = n
-				commentBuf.Reset()
+				outdated = strings.Contains(m[2], "outdated")
 				continue
 			}
 			// Check if we hit a new file header
 			if m := fileHeaderRe.FindStringSubmatch(line); m != nil {
-				if commentBuf.Len() > 0 {
-					comment := strings.TrimSpace(commentBuf.String())
-					data[currentFile][currentLine] = comment
-				}
+				saveAnnotation()
 				currentFile = m[1]
 				if data[currentFile] == nil {
-					data[currentFile] = make(map[int]string)
+					data[currentFile] = make(map[int]*Annotation)
 				}
 				st = inFile
 				continue
 			}
 			if trimmed == "---" {
-				if commentBuf.Len() > 0 {
-					comment := strings.TrimSpace(commentBuf.String())
-					data[currentFile][currentLine] = comment
-				}
+				saveAnnotation()
 				st = idle
 				continue
 			}
@@ -125,17 +136,28 @@ func parse(path string) (map[string]map[int]string, error) {
 			}
 			commentBuf.WriteString(line)
 
-		case skipFence:
-			if strings.TrimSpace(line) == "```" {
+		case inFence:
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "```" {
+				// End of fence — save annotation with context
+				saveAnnotation()
 				st = inFile
+				continue
+			}
+			// Parse context line: "N: content"
+			if m := contextLineRe.FindStringSubmatch(line); m != nil {
+				lineNum, _ := strconv.Atoi(m[1])
+				if contextFrom == 0 {
+					contextFrom = lineNum
+				}
+				contextLines = append(contextLines, m[2])
 			}
 		}
 	}
 
 	// Handle trailing comment without a fence
-	if st == inComment && commentBuf.Len() > 0 {
-		comment := strings.TrimSpace(commentBuf.String())
-		data[currentFile][currentLine] = comment
+	if (st == inComment || st == inFence) && commentBuf.Len() > 0 {
+		saveAnnotation()
 	}
 
 	if err := scanner.Err(); err != nil {

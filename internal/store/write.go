@@ -13,7 +13,7 @@ import (
 )
 
 // serialize converts the annotation map to a markdown string.
-func serialize(data map[string]map[int]string, srcRoot string) string {
+func serialize(data map[string]map[int]*Annotation, srcRoot string) string {
 	var b strings.Builder
 
 	b.WriteString("# Code Review\n\n")
@@ -45,9 +45,13 @@ func serialize(data map[string]map[int]string, srcRoot string) string {
 		sort.Ints(lineNums)
 
 		for _, lineNum := range lineNums {
-			comment := lines[lineNum]
-			b.WriteString(fmt.Sprintf("\n#### Line %d\n\n", lineNum))
-			b.WriteString(comment)
+			ann := lines[lineNum]
+			if ann.Outdated {
+				b.WriteString(fmt.Sprintf("\n#### Line %d (outdated)\n\n", lineNum))
+			} else {
+				b.WriteString(fmt.Sprintf("\n#### Line %d\n\n", lineNum))
+			}
+			b.WriteString(ann.Comment)
 			b.WriteString("\n")
 
 			// Try to read context lines from source
@@ -94,6 +98,23 @@ func readContext(srcRoot, relPath string, lineNum, context int) string {
 	}
 
 	return b.String()
+}
+
+// readFileLines reads all lines from a source file and returns them (0-indexed).
+func readFileLines(srcRoot, relPath string) ([]string, error) {
+	absPath := filepath.Join(srcRoot, relPath)
+	f, err := os.Open(absPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
 }
 
 // detectLang returns a language identifier for the code fence.

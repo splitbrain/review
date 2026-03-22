@@ -8,17 +8,22 @@
     currentFile: null,
     fileHtml: '',
     language: '',
-    annotations: {},      // line → comment for current file
-    allAnnotations: {},   // path → {line → comment} for all files
+    annotations: {},      // line → {comment, outdated} for current file
+    allAnnotations: {},   // path → {line → {comment, outdated}} for all files
     editingLine: null,
     editingText: '',
     loading: false,
-    gitStatuses: {},     // path → status string (modified, staged, untracked, added, deleted, conflict)
+    gitStatuses: {},
+    wsConnected: false,
   };
+
+  let ws = null;
+  let wsReconnectDelay = 1000;
 
   // DOM references
   let treeContainer, codeContent, codeHeader, commentList, commentEditor,
-      editorTextarea, editorLineLabel, statusCommentCount, statusMdPath;
+      editorTextarea, editorLineLabel, statusCommentCount, statusMdPath,
+      wsIndicator, toastContainer;
 
   // Initialize
   document.addEventListener('DOMContentLoaded', () => {
@@ -31,10 +36,13 @@
     editorLineLabel = document.getElementById('editor-line-label');
     statusCommentCount = document.getElementById('status-comment-count');
     statusMdPath = document.getElementById('status-md-path');
+    wsIndicator = document.getElementById('ws-indicator');
+    toastContainer = document.getElementById('toast-container');
 
     loadTree();
     loadAllAnnotations();
     loadGitStatus();
+    connectWebSocket();
   });
 
   // API helpers
@@ -50,6 +58,103 @@
       throw new Error(err.error || 'Request failed');
     }
     return res.json();
+  }
+
+  // WebSocket connection
+  function connectWebSocket() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(proto + '//' + location.host + '/ws');
+
+    ws.onopen = () => {
+      state.wsConnected = true;
+      wsReconnectDelay = 1000;
+      updateWsIndicator();
+    };
+
+    ws.onclose = () => {
+      state.wsConnected = false;
+      updateWsIndicator();
+      // Reconnect with exponential backoff
+      setTimeout(() => {
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+        connectWebSocket();
+      }, wsReconnectDelay);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleWsMessage(msg);
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e);
+      }
+    };
+  }
+
+  function handleWsMessage(msg) {
+    switch (msg.type) {
+      case 'file-changed':
+        showToast('File changed: ' + msg.path);
+        // Update allAnnotations for this file
+        if (msg.annotations) {
+          state.allAnnotations[msg.path] = msg.annotations;
+        }
+        // If we're viewing this file, refresh it
+        if (state.currentFile === msg.path) {
+          refreshCurrentFile();
+        }
+        updateCommentCount();
+        renderTree();
+        break;
+
+      case 'review-deleted':
+        showToast('REVIEW.md was deleted — all annotations lost', true);
+        state.allAnnotations = {};
+        state.annotations = {};
+        updateCommentCount();
+        renderCommentList();
+        renderTree();
+        if (state.currentFile) {
+          refreshCurrentFile();
+        }
+        break;
+
+      case 'review-reloaded':
+        showToast('REVIEW.md reloaded from disk');
+        if (msg.allAnnotations) {
+          state.allAnnotations = msg.allAnnotations;
+        } else {
+          loadAllAnnotations();
+        }
+        if (state.currentFile) {
+          refreshCurrentFile();
+        }
+        updateCommentCount();
+        renderTree();
+        break;
+    }
+  }
+
+  function updateWsIndicator() {
+    if (!wsIndicator) return;
+    wsIndicator.className = 'ws-indicator ' + (state.wsConnected ? 'connected' : 'disconnected');
+    wsIndicator.title = state.wsConnected ? 'Live updates connected' : 'Live updates disconnected';
+  }
+
+  function showToast(message, isError) {
+    if (!toastContainer) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (isError ? ' toast-error' : '');
+    toast.textContent = message;
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('toast-fade');
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
   }
 
   // Load file tree
@@ -146,15 +251,16 @@
           container.appendChild(childContainer);
         }
       } else {
-        const hasComments = state.allAnnotations[entry.path] &&
-                           Object.keys(state.allAnnotations[entry.path]).length > 0;
+        const fileAnns = state.allAnnotations[entry.path];
+        const hasComments = fileAnns && Object.keys(fileAnns).length > 0;
+        const hasOutdated = hasComments && Object.values(fileAnns).some(a => a.outdated);
         const fileStatus = getGitStatus(entry.path);
         if (fileStatus) item.classList.add('git-' + fileStatus);
 
         item.innerHTML = `
           <svg><use href="/static/assets/icons.svg#icon-file"/></svg>
           <span>${escapeHtml(entry.name)}</span>
-          ${hasComments ? '<span class="comment-dot"></span>' : ''}
+          ${hasOutdated ? '<span class="comment-dot outdated-dot"></span>' : hasComments ? '<span class="comment-dot"></span>' : ''}
         `;
 
         if (state.currentFile === entry.path) {
@@ -169,10 +275,29 @@
 
   function hasAnnotationsInTree(entry) {
     if (!entry.isDir) {
-      return state.allAnnotations[entry.path] &&
-             Object.keys(state.allAnnotations[entry.path]).length > 0;
+      const anns = state.allAnnotations[entry.path];
+      return anns && Object.keys(anns).length > 0;
     }
     return entry.children && entry.children.some(c => hasAnnotationsInTree(c));
+  }
+
+  // Refresh current file (re-fetch annotations, keep scroll position)
+  async function refreshCurrentFile() {
+    if (!state.currentFile) return;
+    try {
+      const [fileData, annData] = await Promise.all([
+        api('GET', '/api/file?path=' + encodeURIComponent(state.currentFile)),
+        api('GET', '/api/annotations?path=' + encodeURIComponent(state.currentFile)),
+      ]);
+      state.fileHtml = fileData.html;
+      state.language = fileData.language;
+      state.annotations = annData;
+      codeContent.innerHTML = state.fileHtml;
+      attachLineHandlers();
+      renderCommentList();
+    } catch (e) {
+      console.error('Failed to refresh file:', e);
+    }
   }
 
   // Open a file
@@ -241,8 +366,12 @@
         lineEl.dataset.lineNum = lineNum;
 
         // Mark lines with comments
-        if (state.annotations[lineNum]) {
+        const ann = state.annotations[lineNum];
+        if (ann) {
           lineEl.classList.add('has-comment');
+          if (ann.outdated) {
+            lineEl.classList.add('has-outdated-comment');
+          }
         }
 
         lineEl.addEventListener('click', () => clickLine(lineNum));
@@ -260,7 +389,8 @@
     if (lineEl) lineEl.classList.add('selected');
 
     state.editingLine = lineNum;
-    state.editingText = state.annotations[lineNum] || '';
+    const ann = state.annotations[lineNum];
+    state.editingText = ann ? ann.comment : '';
 
     editorLineLabel.textContent = 'Line ' + lineNum;
     editorTextarea.value = state.editingText;
@@ -281,15 +411,18 @@
         comment: text,
       });
 
-      state.annotations[state.editingLine] = text;
+      state.annotations[state.editingLine] = { comment: text, outdated: false };
       if (!state.allAnnotations[state.currentFile]) {
         state.allAnnotations[state.currentFile] = {};
       }
-      state.allAnnotations[state.currentFile][state.editingLine] = text;
+      state.allAnnotations[state.currentFile][state.editingLine] = { comment: text, outdated: false };
 
       // Update gutter
       const lineEl = codeContent.querySelector(`.line[data-line-num="${state.editingLine}"]`);
-      if (lineEl) lineEl.classList.add('has-comment');
+      if (lineEl) {
+        lineEl.classList.add('has-comment');
+        lineEl.classList.remove('has-outdated-comment');
+      }
 
       state.editingLine = null;
       updateEditorVisibility();
@@ -321,7 +454,10 @@
 
       // Update gutter
       const lineEl = codeContent.querySelector(`.line[data-line-num="${state.editingLine}"]`);
-      if (lineEl) lineEl.classList.remove('has-comment');
+      if (lineEl) {
+        lineEl.classList.remove('has-comment');
+        lineEl.classList.remove('has-outdated-comment');
+      }
 
       state.editingLine = null;
       updateEditorVisibility();
@@ -350,12 +486,17 @@
       return;
     }
 
-    commentList.innerHTML = lines.map(lineNum => `
-      <div class="comment-item" data-comment-line="${lineNum}">
-        <div class="comment-line">Line ${lineNum}</div>
-        <div class="comment-text">${escapeHtml(state.annotations[lineNum])}</div>
-      </div>
-    `).join('');
+    commentList.innerHTML = lines.map(lineNum => {
+      const ann = state.annotations[lineNum];
+      const outdatedClass = ann && ann.outdated ? ' comment-outdated' : '';
+      const outdatedBadge = ann && ann.outdated ? '<span class="outdated-badge">outdated</span>' : '';
+      return `
+        <div class="comment-item${outdatedClass}" data-comment-line="${lineNum}">
+          <div class="comment-line">Line ${lineNum} ${outdatedBadge}</div>
+          <div class="comment-text">${escapeHtml(ann ? ann.comment : '')}</div>
+        </div>
+      `;
+    }).join('');
 
     // Attach click handlers
     commentList.querySelectorAll('.comment-item').forEach(item => {

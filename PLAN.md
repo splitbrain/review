@@ -25,9 +25,13 @@ Currently `parse.go` skips the code fence content (the `skipFence` state just di
 type Annotation struct {
     Comment     string
     Context     []string  // stored context lines from REVIEW.md (without line-number prefix)
-    ContextFrom int       // first line number of context
+    ContextFrom int       // first line number of context (drives the "N: ..." prefixes in REVIEW.md)
     Outdated    bool      // true if context no longer matches source
 }
+// Note: when drift detection relocates an annotation, ContextFrom is updated
+// to the new position. On flush(), serialize() calls readContext() which re-reads
+// the source file at the new line range, so the "N: content" prefixes in the
+// REVIEW.md code fence are regenerated with the correct (relocated) line numbers.
 ```
 
 Change `data` from `map[string]map[int]string` to `map[string]map[int]*Annotation`. This is the biggest refactor — all call sites (store methods, handlers, serialization) must be updated.
@@ -43,9 +47,13 @@ Provide a method `(s *Store) CheckDrift(filePath string) (changed bool)` that:
 3. If they match — no change needed
 4. If they don't match — attempt relocation:
    - Search the entire file for the stored context block (exact substring match of all context lines)
-   - If found at a new offset, compute the new annotation line number: `newLine = oldLine + (newContextFrom - oldContextFrom)`. Update the annotation's line number and context range in the store. Set `changed = true`.
+   - If found at a new offset, compute the delta: `delta = newContextFrom - oldContextFrom`. Update:
+     - The annotation's key in the map: move from `oldLine` to `oldLine + delta`
+     - `ContextFrom`: set to `newContextFrom`
+     - `Context` lines stay the same (content unchanged, just moved)
+   - Set `changed = true`.
    - If not found, mark the annotation as `Outdated = true`. Set `changed = true`.
-5. If `changed`, call `flush()` to rewrite REVIEW.md with corrected line numbers
+5. If `changed`, call `flush()` to rewrite REVIEW.md with corrected line numbers. Since `serialize()` calls `readContext()` which re-reads the source file and formats `N: content` lines using the (now-corrected) line number, the context block in REVIEW.md will automatically get the updated line-number prefixes.
 
 Also provide `(s *Store) CheckAllDrift() map[string]bool` that runs drift check on all annotated files and returns which files had changes.
 

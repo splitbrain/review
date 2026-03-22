@@ -185,6 +185,34 @@ func TestFindContext(t *testing.T) {
 	}
 }
 
+// TestOnChange_NoDeadlock verifies that Set/Delete don't deadlock when an
+// OnChange callback reads from the store (as the file watcher does).
+func TestOnChange_NoDeadlock(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "test.go")
+	os.WriteFile(srcFile, []byte("line1\nline2\nline3\n"), 0644)
+
+	mdPath := filepath.Join(tmpDir, "REVIEW.md")
+	st, err := Load(mdPath, tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register a callback that reads from the store, mimicking watcher.addAnnotatedFiles.
+	st.OnChange(func() {
+		_ = st.AnnotatedFiles()
+	})
+
+	// These will deadlock (and the test will time out) if notifyChange
+	// is called while the write lock is still held.
+	if err := st.Set("test.go", 1, "comment"); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+	if err := st.Delete("test.go", 1); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+}
+
 func keys(m map[int]*Annotation) []int {
 	ks := make([]int, 0, len(m))
 	for k := range m {

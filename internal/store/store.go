@@ -63,13 +63,14 @@ func (s *Store) notifyChange() {
 // Set adds or updates a comment on a specific file and line.
 func (s *Store) Set(file string, line int, comment string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.data[file] == nil {
 		s.data[file] = make(map[int]*Annotation)
 	}
 	s.data[file][line] = &Annotation{Comment: comment}
 	err := s.flush()
+	s.mu.Unlock()
+
 	if err == nil {
 		s.notifyChange()
 	}
@@ -79,7 +80,6 @@ func (s *Store) Set(file string, line int, comment string) error {
 // Delete removes a comment from a specific file and line.
 func (s *Store) Delete(file string, line int) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if m, ok := s.data[file]; ok {
 		delete(m, line)
@@ -88,6 +88,8 @@ func (s *Store) Delete(file string, line int) error {
 		}
 	}
 	err := s.flush()
+	s.mu.Unlock()
+
 	if err == nil {
 		s.notifyChange()
 	}

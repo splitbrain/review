@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"log"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -108,7 +109,14 @@ func (w *Watcher) loop() {
 					continue
 				}
 				if ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename) {
-					w.emitDebounced(mdPath, Event{Type: "review-deleted"})
+					// Atomic rename (flush) looks like a Rename event.
+					// Check if the file still exists to distinguish real
+					// deletion from an atomic replace.
+					if _, err := os.Stat(mdPath); err != nil {
+						w.emitDebounced(mdPath, Event{Type: "review-deleted"})
+					} else {
+						w.emitDebounced(mdPath, Event{Type: "review-reloaded"})
+					}
 				} else if ev.Has(fsnotify.Write) || ev.Has(fsnotify.Create) {
 					w.emitDebounced(mdPath, Event{Type: "review-reloaded"})
 				}

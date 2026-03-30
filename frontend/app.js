@@ -10,6 +10,7 @@
     language: '',
     annotations: {},      // line → {comment, outdated} for current file
     allAnnotations: {},   // path → {line → {comment, outdated}} for all files
+    diffLines: {},        // line → "added"|"modified" for current file
     editingLine: null,
     editingText: '',
     loading: false,
@@ -291,6 +292,7 @@
       ]);
       state.fileHtml = fileData.html;
       state.language = fileData.language;
+      state.diffLines = fileData.diffLines || {};
       state.annotations = annData;
       codeContent.innerHTML = state.fileHtml;
       attachLineHandlers();
@@ -321,6 +323,7 @@
 
       state.fileHtml = fileData.html;
       state.language = fileData.language;
+      state.diffLines = fileData.diffLines || {};
       state.annotations = annData;
 
       codeHeader.innerHTML = `
@@ -364,6 +367,13 @@
 
       if (lineNum && !isNaN(lineNum)) {
         lineEl.dataset.lineNum = lineNum;
+
+        // Mark changed lines (git diff)
+        const diffType = state.diffLines[lineNum];
+        if (diffType) {
+          lineEl.classList.add('diff-' + diffType);
+          lineEl.title = diffType === 'added' ? 'Line added' : 'Line modified';
+        }
 
         // Mark lines with comments
         const ann = state.annotations[lineNum];

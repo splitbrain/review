@@ -185,6 +185,37 @@ body {
   background: rgba(37, 99, 235, 0.12);
 }
 
+/* Diff line highlighting */
+.code-content .chroma .line.diff-added {
+  background: rgba(22, 163, 74, 0.08);
+  border-left-color: #16a34a;
+}
+
+.code-content .chroma .line.diff-added:hover {
+  background: rgba(22, 163, 74, 0.15);
+}
+
+.code-content .chroma .line.diff-modified {
+  background: rgba(217, 119, 6, 0.08);
+  border-left-color: #d97706;
+}
+
+.code-content .chroma .line.diff-modified:hover {
+  background: rgba(217, 119, 6, 0.15);
+}
+
+/* Comment styling takes precedence over diff highlighting */
+.code-content .chroma .line.has-comment.diff-added,
+.code-content .chroma .line.has-comment.diff-modified {
+  border-left-color: var(--pico-primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.code-content .chroma .line.has-comment.diff-added:hover,
+.code-content .chroma .line.has-comment.diff-modified:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
 /* Empty state */
 .empty-state {
   display: flex;

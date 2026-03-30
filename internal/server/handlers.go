@@ -29,6 +29,12 @@ func (h *handlers) handleTree(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, tree)
 }
 
+type fileResponse struct {
+	HTML      string                       `json:"html"`
+	Language  string                       `json:"language"`
+	DiffLines map[int]gitstatus.LineChange `json:"diffLines,omitempty"`
+}
+
 func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -49,8 +55,13 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := highlight.Highlight(path, string(content))
-	jsonResponse(w, result)
+	hl := highlight.Highlight(path, string(content))
+	resp := fileResponse{
+		HTML:      hl.HTML,
+		Language:  hl.Language,
+		DiffLines: gitstatus.DiffLines(h.rootDir, path),
+	}
+	jsonResponse(w, resp)
 }
 
 // annotationResponse is the JSON shape for a single annotation.

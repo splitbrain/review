@@ -514,6 +514,22 @@ body {
   }
 }
 
+/* Scrollbar markers */
+.scrollbar-markers {
+  position: fixed;
+  width: 8px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.scrollbar-mark {
+  position: absolute;
+  right: 0;
+  width: 8px;
+  height: 3px;
+  border-radius: 1px;
+}
+
 /* Diff tooltip */
 .diff-tooltip {
   position: fixed;

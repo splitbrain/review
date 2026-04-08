@@ -418,6 +418,43 @@
         lineEl.addEventListener('click', () => clickLine(lineNum));
       }
     });
+    renderScrollbarMarkers();
+  }
+
+  // Render scrollbar markers for comments and diff lines
+  function renderScrollbarMarkers() {
+    let strip = document.querySelector('.scrollbar-markers');
+    if (strip) strip.remove();
+
+    const totalLines = codeContent.querySelectorAll('.chroma .line').length;
+    if (totalLines === 0) return;
+
+    const markers = [];
+    for (const [line, type] of Object.entries(state.diffLines)) {
+      markers.push({ line: Number(line), color: type === 'added' ? '#16a34a' : '#d97706' });
+    }
+    for (const line of Object.keys(state.annotations)) {
+      markers.push({ line: Number(line), color: 'rgb(37, 99, 235)' });
+    }
+    if (markers.length === 0) return;
+
+    strip = document.createElement('div');
+    strip.className = 'scrollbar-markers';
+
+    // Position over the scrollbar area of code-content
+    const rect = codeContent.getBoundingClientRect();
+    strip.style.top = rect.top + 'px';
+    strip.style.right = (window.innerWidth - rect.right) + 'px';
+    strip.style.height = rect.height + 'px';
+
+    markers.forEach(m => {
+      const mark = document.createElement('div');
+      mark.className = 'scrollbar-mark';
+      mark.style.top = ((m.line - 1) / totalLines * 100) + '%';
+      mark.style.backgroundColor = m.color;
+      strip.appendChild(mark);
+    });
+    document.body.appendChild(strip);
   }
 
   // Click a line to add/edit comment

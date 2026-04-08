@@ -137,6 +137,14 @@
         updateCommentCount();
         renderTree();
         break;
+
+      case 'server-shutdown':
+        // Server is shutting down — close the tab
+        document.title = 'Review — closed';
+        window.close();
+        // Fallback if window.close() is blocked by browser policy
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--pico-muted)"><p>Server stopped. You can close this tab.</p></div>';
+        break;
     }
   }
 

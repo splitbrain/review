@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
+	"time"
 
 	"review/internal/server"
 	"review/internal/store"
@@ -88,7 +93,23 @@ func main() {
 
 	go openBrowser(url)
 
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	srv := &http.Server{Addr: addr, Handler: handler}
+
+	// Graceful shutdown: catch signals, notify clients, then stop
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigCh
+		log.Println("Shutting down...")
+		hub.Broadcast(map[string]string{"type": "server-shutdown"})
+		time.Sleep(200 * time.Millisecond) // give WS time to deliver
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		srv.Shutdown(ctx)
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server error: %v", err)
 	}
 }

@@ -514,6 +514,30 @@ body {
   }
 }
 
+/* Diff tooltip */
+.diff-tooltip {
+  position: fixed;
+  z-index: 1001;
+  max-width: 600px;
+  max-height: 300px;
+  overflow: auto;
+  background: var(--pico-card-bg);
+  border: 1px solid var(--pico-border);
+  border-radius: var(--pico-radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 0.5rem;
+  pointer-events: none;
+}
+
+.diff-tooltip pre {
+  margin: 0;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre;
+  color: var(--pico-color);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .app-layout {

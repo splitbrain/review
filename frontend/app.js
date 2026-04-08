@@ -11,6 +11,7 @@
     annotations: {},      // line → {comment, outdated} for current file
     allAnnotations: {},   // path → {line → {comment, outdated}} for all files
     diffLines: {},        // line → "added"|"modified" for current file
+    diffHunks: [],        // [{startLine, endLine, diff}] for current file
     editingLine: null,
     editingText: '',
     loading: false,
@@ -310,6 +311,7 @@
       state.fileHtml = fileData.html;
       state.language = fileData.language;
       state.diffLines = fileData.diffLines || {};
+      state.diffHunks = fileData.diffHunks || [];
       state.annotations = annData;
       codeContent.innerHTML = state.fileHtml;
       attachLineHandlers();
@@ -346,6 +348,7 @@
       state.fileHtml = fileData.html;
       state.language = fileData.language;
       state.diffLines = fileData.diffLines || {};
+      state.diffHunks = fileData.diffHunks || [];
       state.annotations = annData;
 
       codeHeader.innerHTML = `
@@ -394,7 +397,13 @@
         const diffType = state.diffLines[lineNum];
         if (diffType) {
           lineEl.classList.add('diff-' + diffType);
-          lineEl.title = diffType === 'added' ? 'Line added' : 'Line modified';
+
+          // Find the hunk for this line
+          const hunk = state.diffHunks.find(h => lineNum >= h.startLine && lineNum <= h.endLine);
+          if (hunk) {
+            lineEl.addEventListener('mouseenter', (e) => showDiffTooltip(e, hunk));
+            lineEl.addEventListener('mouseleave', hideDiffTooltip);
+          }
         }
 
         // Mark lines with comments
@@ -564,6 +573,37 @@
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // Diff tooltip
+  let diffTooltip = null;
+
+  function showDiffTooltip(event, hunk) {
+    hideDiffTooltip();
+    diffTooltip = document.createElement('div');
+    diffTooltip.className = 'diff-tooltip';
+    diffTooltip.innerHTML = '<pre>' + escapeHtml(hunk.diff.trimEnd()) + '</pre>';
+
+    document.body.appendChild(diffTooltip);
+    const rect = event.target.getBoundingClientRect();
+    diffTooltip.style.top = (rect.bottom + 4) + 'px';
+    diffTooltip.style.left = rect.left + 'px';
+
+    // Ensure it doesn't overflow viewport
+    const tooltipRect = diffTooltip.getBoundingClientRect();
+    if (tooltipRect.right > window.innerWidth - 16) {
+      diffTooltip.style.left = (window.innerWidth - tooltipRect.width - 16) + 'px';
+    }
+    if (tooltipRect.bottom > window.innerHeight - 16) {
+      diffTooltip.style.top = (rect.top - tooltipRect.height - 4) + 'px';
+    }
+  }
+
+  function hideDiffTooltip() {
+    if (diffTooltip) {
+      diffTooltip.remove();
+      diffTooltip = null;
+    }
   }
 
   // Start a new review (delete REVIEW.md)

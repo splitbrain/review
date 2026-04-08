@@ -33,6 +33,7 @@ type fileResponse struct {
 	HTML      string                       `json:"html"`
 	Language  string                       `json:"language"`
 	DiffLines map[int]gitstatus.LineChange `json:"diffLines,omitempty"`
+	DiffHunks []gitstatus.DiffHunk         `json:"diffHunks,omitempty"`
 }
 
 func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +61,7 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 		HTML:      hl.HTML,
 		Language:  hl.Language,
 		DiffLines: gitstatus.DiffLines(h.rootDir, path),
+		DiffHunks: gitstatus.DiffHunksForFile(h.rootDir, path),
 	}
 	jsonResponse(w, resp)
 }

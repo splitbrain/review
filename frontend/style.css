@@ -206,23 +206,13 @@ body {
   background: rgba(37, 99, 235, 0.12);
 }
 
-/* Diff line highlighting */
+/* Diff line highlighting — gutter marker only, no background */
 .code-content .chroma .line.diff-added {
-  background: rgba(22, 163, 74, 0.08);
   border-left-color: #16a34a;
 }
 
-.code-content .chroma .line.diff-added:hover {
-  background: rgba(22, 163, 74, 0.15);
-}
-
 .code-content .chroma .line.diff-modified {
-  background: rgba(217, 119, 6, 0.08);
   border-left-color: #d97706;
-}
-
-.code-content .chroma .line.diff-modified:hover {
-  background: rgba(217, 119, 6, 0.15);
 }
 
 /* Comment styling takes precedence over diff highlighting */

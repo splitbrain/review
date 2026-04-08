@@ -194,12 +194,20 @@ body {
 }
 
 .code-content .chroma .line.has-comment {
-  border-left-color: var(--pico-primary);
-  background: rgba(37, 99, 235, 0.04);
+  position: relative;
 }
 
-.code-content .chroma .line.has-comment:hover {
-  background: rgba(37, 99, 235, 0.1);
+.code-content .chroma .line.has-comment::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pico-primary);
+  pointer-events: none;
 }
 
 .code-content .chroma .line.selected {
@@ -215,17 +223,7 @@ body {
   border-left-color: #d97706;
 }
 
-/* Comment styling takes precedence over diff highlighting */
-.code-content .chroma .line.has-comment.diff-added,
-.code-content .chroma .line.has-comment.diff-modified {
-  border-left-color: var(--pico-primary);
-  background: rgba(37, 99, 235, 0.04);
-}
-
-.code-content .chroma .line.has-comment.diff-added:hover,
-.code-content .chroma .line.has-comment.diff-modified:hover {
-  background: rgba(37, 99, 235, 0.1);
-}
+/* Comment dot + diff gutter coexist — no overrides needed */
 
 /* Empty state */
 .empty-state {
@@ -420,14 +418,9 @@ body {
   color: #fff;
 }
 
-/* Outdated annotations */
-.code-content .chroma .line.has-outdated-comment {
-  border-left-color: #d97706;
-  background: rgba(217, 119, 6, 0.06);
-}
-
-.code-content .chroma .line.has-outdated-comment:hover {
-  background: rgba(217, 119, 6, 0.12);
+/* Outdated annotations — orange dot */
+.code-content .chroma .line.has-outdated-comment::after {
+  background: #d97706;
 }
 
 .comment-item.comment-outdated {

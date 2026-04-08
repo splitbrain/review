@@ -152,3 +152,4 @@ func openBrowser(url string) {
 	args = append(args, url)
 	exec.Command(cmd, args...).Start()
 }
+

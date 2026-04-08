@@ -109,6 +109,8 @@ body {
   background: var(--pico-primary);
   margin-left: auto;
   flex-shrink: 0;
+  position: sticky;
+  right: 0.5rem;
 }
 
 /* Code View */

@@ -32,6 +32,27 @@ body {
   color: var(--pico-muted);
   border-bottom: 1px solid var(--pico-border);
   margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.new-review-btn {
+  all: unset;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--pico-border);
+  border-radius: var(--pico-radius);
+  cursor: pointer;
+  color: var(--pico-muted);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: normal;
+}
+
+.new-review-btn:hover {
+  background: var(--pico-border);
+  color: var(--pico-color);
 }
 
 .tree-item {

@@ -169,6 +169,17 @@ func (h *handlers) handleGitStatus(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, result)
 }
 
+func (h *handlers) handleDeleteReview(w http.ResponseWriter, r *http.Request) {
+	mdPath := h.store.MdPath()
+	if err := os.Remove(mdPath); err != nil && !os.IsNotExist(err) {
+		jsonError(w, fmt.Sprintf("failed to delete: %v", err), http.StatusInternalServerError)
+		return
+	}
+	// Reload store (now empty)
+	h.store.Reload()
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
 func (h *handlers) handleChromaCSS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/css")
 	w.Write([]byte(highlight.CSS()))

@@ -552,7 +552,25 @@
     return div.innerHTML;
   }
 
+  // Start a new review (delete REVIEW.md)
+  async function newReview() {
+    if (!confirm('Start a new review? This will delete all existing comments.')) return;
+    try {
+      await api('DELETE', '/api/review');
+      state.allAnnotations = {};
+      state.annotations = {};
+      state.editingLine = null;
+      updateEditorVisibility();
+      updateCommentCount();
+      renderCommentList();
+      renderTree();
+      showToast('New review started');
+    } catch (e) {
+      alert('Failed to start new review: ' + e.message);
+    }
+  }
+
   // Expose functions for inline handlers
-  window.app = { saveComment, deleteComment, cancelEdit };
+  window.app = { saveComment, deleteComment, cancelEdit, newReview };
 
 })();

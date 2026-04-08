@@ -39,6 +39,7 @@ func New(st *store.Store, rootDir string, frontendFS fs.FS, hub *Hub) http.Handl
 	r.Delete("/api/annotations", h.handleDeleteAnnotation)
 	r.Get("/api/git-status", h.handleGitStatus)
 	r.Get("/api/chroma.css", h.handleChromaCSS)
+	r.Delete("/api/review", h.handleDeleteReview)
 
 	// WebSocket
 	if hub != nil {

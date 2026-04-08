@@ -10,7 +10,7 @@ body {
 /* Layout */
 .app-layout {
   display: grid;
-  grid-template-columns: 240px 1fr 320px;
+  grid-template-columns: 300px 1fr 320px;
   flex: 1;
   overflow: hidden;
 }

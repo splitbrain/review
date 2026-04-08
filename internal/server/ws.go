@@ -22,6 +22,7 @@ type Hub struct {
 	mu         sync.RWMutex
 	broadcast  chan []byte
 	done       chan struct{}
+	onMessage  func(msg map[string]interface{}) // optional handler for client messages
 }
 
 type wsClient struct {
@@ -36,6 +37,11 @@ func NewHub() *Hub {
 		broadcast: make(chan []byte, 64),
 		done:      make(chan struct{}),
 	}
+}
+
+// OnMessage sets a handler for client→server messages.
+func (h *Hub) OnMessage(fn func(msg map[string]interface{})) {
+	h.onMessage = fn
 }
 
 // Run starts the hub's broadcast loop.
@@ -131,11 +137,16 @@ func (c *wsClient) readPump(h *Hub) {
 		return nil
 	})
 
-	// Keep reading to detect disconnects; we don't expect client messages
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, data, err := c.conn.ReadMessage()
 		if err != nil {
 			return
+		}
+		if h.onMessage != nil {
+			var msg map[string]interface{}
+			if json.Unmarshal(data, &msg) == nil {
+				h.onMessage(msg)
+			}
 		}
 	}
 }

@@ -64,6 +64,15 @@ func main() {
 		w.Start()
 		defer w.Stop()
 
+		// Let clients register files to watch (currently viewed file)
+		hub.OnMessage(func(msg map[string]interface{}) {
+			if msg["type"] == "watch-file" {
+				if path, ok := msg["path"].(string); ok && path != "" {
+					w.WatchFile(path)
+				}
+			}
+		})
+
 		// Bridge watcher events to WebSocket hub
 		go func() {
 			for ev := range w.Events() {

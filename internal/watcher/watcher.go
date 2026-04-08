@@ -20,12 +20,14 @@ type Event struct {
 
 // Watcher monitors annotated source files and REVIEW.md for changes.
 type Watcher struct {
-	store     *store.Store
-	fsw       *fsnotify.Watcher
-	events    chan Event
-	done      chan struct{}
-	debounce  map[string]*time.Timer
+	store      *store.Store
+	fsw        *fsnotify.Watcher
+	events     chan Event
+	done       chan struct{}
+	debounce   map[string]*time.Timer
 	debounceMu sync.Mutex
+	extraFiles map[string]bool // additional files to watch (e.g. currently viewed)
+	extraMu    sync.Mutex
 }
 
 // New creates a new file watcher. Call Start() to begin watching.
@@ -36,11 +38,12 @@ func New(st *store.Store) (*Watcher, error) {
 	}
 
 	w := &Watcher{
-		store:    st,
-		fsw:      fsw,
-		events:   make(chan Event, 64),
-		done:     make(chan struct{}),
-		debounce: make(map[string]*time.Timer),
+		store:      st,
+		fsw:        fsw,
+		events:     make(chan Event, 64),
+		done:       make(chan struct{}),
+		debounce:   make(map[string]*time.Timer),
+		extraFiles: make(map[string]bool),
 	}
 
 	return w, nil
@@ -74,6 +77,17 @@ func (w *Watcher) Start() {
 func (w *Watcher) Stop() {
 	close(w.done)
 	w.fsw.Close()
+}
+
+// WatchFile adds a file to the watch list (e.g. the currently viewed file).
+func (w *Watcher) WatchFile(relPath string) {
+	w.extraMu.Lock()
+	w.extraFiles[relPath] = true
+	w.extraMu.Unlock()
+
+	absPath := filepath.Join(w.store.SrcRoot(), relPath)
+	dir := filepath.Dir(absPath)
+	w.fsw.Add(dir)
 }
 
 func (w *Watcher) addAnnotatedFiles() {
@@ -131,10 +145,17 @@ func (w *Watcher) loop() {
 				}
 				// Check if this file has annotations
 				anns := w.store.GetFile(relPath)
-				if len(anns) == 0 {
+				if len(anns) > 0 {
+					w.emitDebounced(absPath, Event{Type: "file-changed", Path: relPath})
 					continue
 				}
-				w.emitDebounced(absPath, Event{Type: "file-changed", Path: relPath})
+				// Check if this is an extra-watched file (currently viewed)
+				w.extraMu.Lock()
+				isExtra := w.extraFiles[relPath]
+				w.extraMu.Unlock()
+				if isExtra {
+					w.emitDebounced(absPath, Event{Type: "source-changed", Path: relPath})
+				}
 			}
 
 		case err, ok := <-w.fsw.Errors:

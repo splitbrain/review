@@ -124,6 +124,15 @@
         }
         break;
 
+      case 'source-changed':
+        // Source file changed on disk — reload if currently viewing it
+        if (state.currentFile === msg.path) {
+          refreshCurrentFile();
+        }
+        // Also refresh git status and tree (file may have new diff status)
+        loadGitStatus();
+        break;
+
       case 'review-reloaded':
         showToast('REVIEW.md reloaded from disk');
         if (msg.allAnnotations) {
@@ -316,6 +325,11 @@
     state.currentFile = path;
     state.editingLine = null;
     updateEditorVisibility();
+
+    // Tell server to watch this file for changes
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'watch-file', path: path }));
+    }
 
     codeHeader.innerHTML = `
       <span class="file-path">${escapeHtml(path)}</span>

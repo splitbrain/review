@@ -10,7 +10,7 @@ The tool was vibecoded as a simple way to review agentic coded files. The markdo
 - **Inline annotations** — click any line to add, edit, or delete review comments
 - **Syntax highlighting** — powered by [Chroma](https://github.com/alecthomas/chroma)
 - **Git status integration** — files and directories are color-coded by git status (modified, staged, untracked, etc.)
-- **Git diff markers** — changed/added lines are marked in the gutter; hover to see the full diff hunk
+- **Git diff markers** — changed, added, and deleted lines are marked in the gutter; hover to see the full diff hunk
 - **Scrollbar annotations** — colored markers on the scrollbar show where comments and changes are in long files
 - **Live updates** — files reload automatically when changed on disk via WebSocket-based file watching
 - **Drift detection** — annotations automatically relocate when code moves, or are marked outdated if context is lost

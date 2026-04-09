@@ -30,10 +30,11 @@ func (h *handlers) handleTree(w http.ResponseWriter, r *http.Request) {
 }
 
 type fileResponse struct {
-	HTML      string                       `json:"html"`
-	Language  string                       `json:"language"`
-	DiffLines map[int]gitstatus.LineChange `json:"diffLines,omitempty"`
-	DiffHunks []gitstatus.DiffHunk         `json:"diffHunks,omitempty"`
+	HTML          string                       `json:"html"`
+	Language      string                       `json:"language"`
+	DiffLines     map[int]gitstatus.LineChange `json:"diffLines,omitempty"`
+	DiffHunks     []gitstatus.DiffHunk         `json:"diffHunks,omitempty"`
+	DiffDeletions []gitstatus.DiffDeletion      `json:"diffDeletions,omitempty"`
 }
 
 func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
@@ -57,11 +58,13 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hl := highlight.Highlight(path, string(content))
+	hunks := gitstatus.DiffHunksForFile(h.rootDir, path)
 	resp := fileResponse{
-		HTML:      hl.HTML,
-		Language:  hl.Language,
-		DiffLines: gitstatus.DiffLines(h.rootDir, path),
-		DiffHunks: gitstatus.DiffHunksForFile(h.rootDir, path),
+		HTML:          hl.HTML,
+		Language:      hl.Language,
+		DiffLines:     gitstatus.DiffLines(h.rootDir, path),
+		DiffHunks:     hunks,
+		DiffDeletions: gitstatus.DiffDeletions(h.rootDir, path, hunks),
 	}
 	jsonResponse(w, resp)
 }

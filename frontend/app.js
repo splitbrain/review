@@ -12,6 +12,7 @@
     allAnnotations: {},   // path → {line → {comment, outdated}} for all files
     diffLines: {},        // line → "added"|"modified" for current file
     diffHunks: [],        // [{startLine, endLine, diff}] for current file
+    diffDeletions: [],    // [{afterLine, count, hunkIndex}] for current file
     editingLine: null,
     editingText: '',
     loading: false,
@@ -318,6 +319,7 @@
       state.language = fileData.language;
       state.diffLines = fileData.diffLines || {};
       state.diffHunks = fileData.diffHunks || [];
+      state.diffDeletions = fileData.diffDeletions || [];
       state.annotations = annData;
       codeContent.innerHTML = state.fileHtml;
       attachLineHandlers();
@@ -355,6 +357,7 @@
       state.language = fileData.language;
       state.diffLines = fileData.diffLines || {};
       state.diffHunks = fileData.diffHunks || [];
+      state.diffDeletions = fileData.diffDeletions || [];
       state.annotations = annData;
 
       codeHeader.innerHTML = `
@@ -427,6 +430,35 @@
         lineEl.addEventListener('click', () => clickLine(lineNum));
       }
     });
+
+    // Inject deletion markers
+    state.diffDeletions.forEach(del => {
+      const marker = document.createElement('span');
+      marker.className = 'line diff-deleted-marker';
+
+      const gutterSpan = document.createElement('span');
+      gutterSpan.className = 'ln diff-del-gutter';
+      gutterSpan.textContent = '\u00a0'; // non-breaking space
+      marker.appendChild(gutterSpan);
+
+      // Wire up tooltip on gutter hover
+      const hunk = del.hunkIndex >= 0 ? state.diffHunks[del.hunkIndex] : null;
+      if (hunk) {
+        gutterSpan.addEventListener('mouseenter', (e) => showDiffTooltip(e, hunk));
+        gutterSpan.addEventListener('mouseleave', hideDiffTooltip);
+      }
+
+      // Insert after the appropriate line
+      if (del.afterLine === 0) {
+        // Deletion at top of file — insert before first line
+        const firstLine = codeContent.querySelector('.chroma .line');
+        if (firstLine) firstLine.parentNode.insertBefore(marker, firstLine);
+      } else {
+        const afterEl = codeContent.querySelector(`.line[data-line-num="${del.afterLine}"]`);
+        if (afterEl) afterEl.insertAdjacentElement('afterend', marker);
+      }
+    });
+
     renderScrollbarMarkers();
   }
 
@@ -441,6 +473,9 @@
     const markers = [];
     for (const [line, type] of Object.entries(state.diffLines)) {
       markers.push({ line: Number(line), color: type === 'added' ? '#16a34a' : '#d97706' });
+    }
+    for (const del of state.diffDeletions) {
+      markers.push({ line: del.afterLine || 1, color: '#dc2626' });
     }
     for (const line of Object.keys(state.annotations)) {
       markers.push({ line: Number(line), color: 'rgb(37, 99, 235)' });

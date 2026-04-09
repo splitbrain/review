@@ -83,11 +83,86 @@ func allLinesAdded(dir, filePath string) map[int]LineChange {
 	return result
 }
 
+// DiffDeletion represents a block of lines deleted between two lines in the new file.
+type DiffDeletion struct {
+	AfterLine int `json:"afterLine"` // deletion sits after this line (0 = top of file)
+	Count     int `json:"count"`     // number of lines deleted
+	HunkIndex int `json:"hunkIndex"` // index into DiffHunks for tooltip
+}
+
 // DiffHunk represents a single diff hunk with its affected line range and raw diff text.
 type DiffHunk struct {
 	StartLine int    `json:"startLine"` // first new-file line in hunk
 	EndLine   int    `json:"endLine"`   // last new-file line in hunk
 	Diff      string `json:"diff"`      // raw diff lines (- and + lines)
+}
+
+// DiffDeletions returns deletion markers for a file by parsing git diff.
+// Each deletion indicates where lines were removed (between which new-file lines).
+func DiffDeletions(dir, filePath string, hunks []DiffHunk) []DiffDeletion {
+	if len(hunks) == 0 {
+		return nil
+	}
+
+	status := fileStatus(dir, filePath)
+	if status == "" || status == StatusUntracked || status == StatusAdded {
+		return nil
+	}
+
+	// Parse the unified=0 diff to find pure deletion hunks
+	cmd := exec.Command("git", "diff", "HEAD", "--unified=0", "--no-color", "--", filePath)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil || len(out) == 0 {
+		return nil
+	}
+
+	var deletions []DiffDeletion
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		m := hunkRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		oldCount := 1
+		newCount := 1
+		newStart, _ := strconv.Atoi(m[3])
+		if m[2] != "" {
+			oldCount, _ = strconv.Atoi(m[2])
+		}
+		if m[4] != "" {
+			newCount, _ = strconv.Atoi(m[4])
+		}
+		// Pure deletion: lines removed, nothing added
+		if newCount == 0 && oldCount > 0 {
+			// Find the matching hunk index (the hunk whose diff contains these deleted lines)
+			// newStart is the line AFTER which the deletion occurred
+			hunkIdx := -1
+			for i, h := range hunks {
+				if h.StartLine == newStart && h.EndLine == newStart-1 {
+					hunkIdx = i
+					break
+				}
+			}
+			// If no exact match, find by proximity
+			if hunkIdx == -1 {
+				for i, h := range hunks {
+					if h.StartLine <= newStart && h.EndLine >= newStart-1 {
+						hunkIdx = i
+						break
+					}
+				}
+			}
+			deletions = append(deletions, DiffDeletion{
+				AfterLine: newStart,
+				Count:     oldCount,
+				HunkIndex: hunkIdx,
+			})
+		}
+	}
+
+	return deletions
 }
 
 // DiffHunksForFile returns parsed diff hunks for the given file.

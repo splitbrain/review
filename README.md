@@ -10,6 +10,12 @@ The tool was vibecoded as a simple way to review agentic coded files. The markdo
 - **Inline annotations** — click any line to add, edit, or delete review comments
 - **Syntax highlighting** — powered by [Chroma](https://github.com/alecthomas/chroma)
 - **Git status integration** — files and directories are color-coded by git status (modified, staged, untracked, etc.)
+- **Git diff markers** — changed/added lines are marked in the gutter; hover to see the full diff hunk
+- **Scrollbar annotations** — colored markers on the scrollbar show where comments and changes are in long files
+- **Live updates** — files reload automatically when changed on disk via WebSocket-based file watching
+- **Drift detection** — annotations automatically relocate when code moves, or are marked outdated if context is lost
+- **New Review** — start a fresh review with one click, clearing all existing annotations
+- **Graceful shutdown** — the browser tab closes automatically when the server stops
 - **Markdown storage** — all annotations are saved to `REVIEW.md` with surrounding code context, making them easy to read and share without the tool
 - **Single binary** — the web frontend is embedded in the Go binary; no external files or dependencies needed at runtime
 
@@ -63,11 +69,13 @@ The tool exposes a JSON API for the frontend:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/tree` | File tree structure |
-| `GET` | `/api/file?path=<path>` | Syntax-highlighted file content |
+| `GET` | `/api/file?path=<path>` | Syntax-highlighted file content with diff data |
 | `GET` | `/api/annotations?path=<path>` | Annotations (all or per-file) |
 | `POST` | `/api/annotations` | Create or update an annotation |
 | `DELETE` | `/api/annotations` | Delete an annotation |
 | `GET` | `/api/git-status` | Git status for all files |
+| `DELETE` | `/api/review` | Delete REVIEW.md and start a new review |
+| `GET` | `/ws` | WebSocket for live updates |
 
 ## License
 

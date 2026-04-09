@@ -556,6 +556,16 @@ body {
   color: var(--pico-color);
 }
 
+.diff-tooltip .diff-add {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+}
+
+.diff-tooltip .diff-del {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .app-layout {

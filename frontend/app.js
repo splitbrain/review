@@ -404,11 +404,14 @@
         if (diffType) {
           lineEl.classList.add('diff-' + diffType);
 
-          // Find the hunk for this line
+          // Show diff tooltip on gutter (line number) hover
           const hunk = state.diffHunks.find(h => lineNum >= h.startLine && lineNum <= h.endLine);
           if (hunk) {
-            lineEl.addEventListener('mouseenter', (e) => showDiffTooltip(e, hunk));
-            lineEl.addEventListener('mouseleave', hideDiffTooltip);
+            const gutter = lineEl.querySelector('.lnt, .ln');
+            if (gutter) {
+              gutter.addEventListener('mouseenter', (e) => showDiffTooltip(e, hunk));
+              gutter.addEventListener('mouseleave', hideDiffTooltip);
+            }
           }
         }
 
@@ -629,7 +632,12 @@
     hideDiffTooltip();
     diffTooltip = document.createElement('div');
     diffTooltip.className = 'diff-tooltip';
-    diffTooltip.innerHTML = '<pre>' + escapeHtml(hunk.diff.trimEnd()) + '</pre>';
+    const lines = hunk.diff.trimEnd().split('\n');
+    const html = lines.map(line => {
+      const cls = line.startsWith('+') ? ' class="diff-add"' : line.startsWith('-') ? ' class="diff-del"' : '';
+      return '<span' + cls + '>' + escapeHtml(line) + '</span>';
+    }).join('\n');
+    diffTooltip.innerHTML = '<pre>' + html + '</pre>';
 
     document.body.appendChild(diffTooltip);
     const rect = event.target.getBoundingClientRect();

@@ -45,6 +45,12 @@
     loadAllAnnotations();
     loadGitStatus();
     connectWebSocket();
+
+    // Reposition scrollbar markers when code-content resizes
+    new ResizeObserver(() => {
+      const strip = document.querySelector('.scrollbar-markers');
+      if (strip) positionScrollbarStrip(strip);
+    }).observe(codeContent);
   });
 
   // API helpers
@@ -441,11 +447,7 @@
     strip = document.createElement('div');
     strip.className = 'scrollbar-markers';
 
-    // Position over the scrollbar area of code-content
-    const rect = codeContent.getBoundingClientRect();
-    strip.style.top = rect.top + 'px';
-    strip.style.right = (window.innerWidth - rect.right) + 'px';
-    strip.style.height = rect.height + 'px';
+    positionScrollbarStrip(strip);
 
     markers.forEach(m => {
       const mark = document.createElement('div');
@@ -456,6 +458,14 @@
     });
     document.body.appendChild(strip);
   }
+
+  function positionScrollbarStrip(strip) {
+    const rect = codeContent.getBoundingClientRect();
+    strip.style.top = rect.top + 'px';
+    strip.style.right = (window.innerWidth - rect.right) + 'px';
+    strip.style.height = rect.height + 'px';
+  }
+
 
   // Click a line to add/edit comment
   function clickLine(lineNum) {

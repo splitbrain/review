@@ -22,6 +22,7 @@
 
   let ws = null;
   let wsReconnectDelay = 1000;
+  let gitStatusTimer = null;
 
   // DOM references
   let treeContainer, codeContent, codeHeader, commentList, commentEditor,
@@ -44,7 +45,7 @@
 
     loadTree();
     loadAllAnnotations();
-    loadGitStatus();
+    loadGitStatusNow();
     connectWebSocket();
 
     // Reposition scrollbar markers when code-content resizes
@@ -203,8 +204,21 @@
     }
   }
 
-  // Load git status
-  async function loadGitStatus() {
+  // Load git status (debounced to avoid hammering git on rapid changes)
+  function loadGitStatus() {
+    if (gitStatusTimer) clearTimeout(gitStatusTimer);
+    gitStatusTimer = setTimeout(async () => {
+      try {
+        state.gitStatuses = await api('GET', '/api/git-status');
+        renderTree();
+      } catch (e) {
+        console.error('Failed to load git status:', e);
+      }
+    }, 500);
+  }
+
+  // Immediate git status load (for initial page load)
+  async function loadGitStatusNow() {
     try {
       state.gitStatuses = await api('GET', '/api/git-status');
       renderTree();
@@ -270,9 +284,9 @@
 
         container.appendChild(item);
 
-        if (entry.children) {
+        if (entry.children && isOpen) {
           const childContainer = document.createElement('div');
-          childContainer.className = 'tree-children' + (isOpen ? ' open' : '');
+          childContainer.className = 'tree-children open';
           renderTreeLevel(entry.children, childContainer, depth + 1);
           container.appendChild(childContainer);
         }

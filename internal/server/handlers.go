@@ -58,13 +58,13 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hl := highlight.Highlight(path, string(content))
-	hunks := gitstatus.DiffHunksForFile(h.rootDir, path)
+	diff := gitstatus.GetFileDiff(h.rootDir, path)
 	resp := fileResponse{
 		HTML:          hl.HTML,
 		Language:      hl.Language,
-		DiffLines:     gitstatus.DiffLines(h.rootDir, path),
-		DiffHunks:     hunks,
-		DiffDeletions: gitstatus.DiffDeletions(h.rootDir, path, hunks),
+		DiffLines:     diff.Lines,
+		DiffHunks:     diff.Hunks,
+		DiffDeletions: diff.Deletions,
 	}
 	jsonResponse(w, resp)
 }

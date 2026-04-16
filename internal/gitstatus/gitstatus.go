@@ -35,7 +35,7 @@ func Get(dir string) FileStatuses {
 	}
 
 	// Get porcelain status
-	cmd = exec.Command("git", "status", "--porcelain", "-uall")
+	cmd = exec.Command("git", "status", "--porcelain", "-unormal")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

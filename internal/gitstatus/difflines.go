@@ -21,31 +21,64 @@ const (
 // hunkRe matches unified diff hunk headers: @@ -old[,count] +new[,count] @@
 var hunkRe = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
-// DiffLines returns a map of line numbers (1-based) to their change type
-// for the given file, comparing the working tree against HEAD.
-// Returns nil if the file has no changes or is not in a git repo.
-func DiffLines(dir, filePath string) map[int]LineChange {
-	// First check git status for this file to handle untracked/added files
+// FileDiffInfo contains all diff information for a single file, computed in one pass.
+type FileDiffInfo struct {
+	Lines     map[int]LineChange
+	Hunks     []DiffHunk
+	Deletions []DiffDeletion
+}
+
+// GetFileDiff returns all diff information for a file in a single call,
+// minimizing the number of git subprocess spawns.
+func GetFileDiff(dir, filePath string) *FileDiffInfo {
 	status := fileStatus(dir, filePath)
 	if status == "" {
-		return nil
+		return &FileDiffInfo{}
 	}
 
-	// For untracked or newly added files, we can't diff against HEAD.
-	// Count lines and mark all as added.
 	if status == StatusUntracked || status == StatusAdded {
-		return allLinesAdded(dir, filePath)
+		return &FileDiffInfo{Lines: allLinesAdded(dir, filePath)}
 	}
 
-	// Run git diff HEAD with no context to get precise line ranges
-	cmd := exec.Command("git", "diff", "HEAD", "--unified=0", "--no-color", "--", filePath)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil || len(out) == 0 {
-		return nil
+	// Run both diffs concurrently
+	type diffResult struct {
+		out []byte
+		err error
+	}
+	ch0 := make(chan diffResult, 1)
+	ch3 := make(chan diffResult, 1)
+
+	go func() {
+		cmd := exec.Command("git", "diff", "HEAD", "--unified=0", "--no-color", "--", filePath)
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		ch0 <- diffResult{out, err}
+	}()
+	go func() {
+		cmd := exec.Command("git", "diff", "HEAD", "--unified=3", "--no-color", "--", filePath)
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		ch3 <- diffResult{out, err}
+	}()
+
+	r0 := <-ch0
+	r3 := <-ch3
+
+	info := &FileDiffInfo{}
+
+	if r0.err == nil && len(r0.out) > 0 {
+		info.Lines = parseDiffHunks(r0.out)
 	}
 
-	return parseDiffHunks(out)
+	if r3.err == nil && len(r3.out) > 0 {
+		info.Hunks = parseHunksWithDiff(r3.out)
+	}
+
+	if len(info.Hunks) > 0 && r0.err == nil && len(r0.out) > 0 {
+		info.Deletions = parseDeletionsFromDiff(r0.out, info.Hunks)
+	}
+
+	return info
 }
 
 // fileStatus returns the git status for a single file.
@@ -97,28 +130,10 @@ type DiffHunk struct {
 	Diff      string `json:"diff"`      // raw diff lines (- and + lines)
 }
 
-// DiffDeletions returns deletion markers for a file by parsing git diff.
-// Each deletion indicates where lines were removed (between which new-file lines).
-func DiffDeletions(dir, filePath string, hunks []DiffHunk) []DiffDeletion {
-	if len(hunks) == 0 {
-		return nil
-	}
-
-	status := fileStatus(dir, filePath)
-	if status == "" || status == StatusUntracked || status == StatusAdded {
-		return nil
-	}
-
-	// Parse the unified=0 diff to find pure deletion hunks
-	cmd := exec.Command("git", "diff", "HEAD", "--unified=0", "--no-color", "--", filePath)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil || len(out) == 0 {
-		return nil
-	}
-
+// parseDeletionsFromDiff extracts deletion markers from unified=0 diff output.
+func parseDeletionsFromDiff(diffOutput []byte, hunks []DiffHunk) []DiffDeletion {
 	var deletions []DiffDeletion
-	scanner := bufio.NewScanner(bytes.NewReader(out))
+	scanner := bufio.NewScanner(bytes.NewReader(diffOutput))
 	for scanner.Scan() {
 		line := scanner.Text()
 		m := hunkRe.FindStringSubmatch(line)
@@ -136,8 +151,6 @@ func DiffDeletions(dir, filePath string, hunks []DiffHunk) []DiffDeletion {
 		}
 		// Pure deletion: lines removed, nothing added
 		if newCount == 0 && oldCount > 0 {
-			// Find the matching hunk index (the hunk whose diff contains these deleted lines)
-			// newStart is the line AFTER which the deletion occurred
 			hunkIdx := -1
 			for i, h := range hunks {
 				if h.StartLine == newStart && h.EndLine == newStart-1 {
@@ -145,7 +158,6 @@ func DiffDeletions(dir, filePath string, hunks []DiffHunk) []DiffDeletion {
 					break
 				}
 			}
-			// If no exact match, find by proximity
 			if hunkIdx == -1 {
 				for i, h := range hunks {
 					if h.StartLine <= newStart && h.EndLine >= newStart-1 {
@@ -161,26 +173,7 @@ func DiffDeletions(dir, filePath string, hunks []DiffHunk) []DiffDeletion {
 			})
 		}
 	}
-
 	return deletions
-}
-
-// DiffHunksForFile returns parsed diff hunks for the given file.
-// Returns nil if the file has no changes or is not in a git repo.
-func DiffHunksForFile(dir, filePath string) []DiffHunk {
-	status := fileStatus(dir, filePath)
-	if status == "" || status == StatusUntracked || status == StatusAdded {
-		return nil
-	}
-
-	cmd := exec.Command("git", "diff", "HEAD", "--unified=3", "--no-color", "--", filePath)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil || len(out) == 0 {
-		return nil
-	}
-
-	return parseHunksWithDiff(out)
 }
 
 // parseHunksWithDiff extracts hunks with their raw diff text.

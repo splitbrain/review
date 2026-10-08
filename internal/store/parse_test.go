@@ -33,7 +33,8 @@ This is a comment
 `
 	os.WriteFile(mdPath, []byte(content), 0644)
 
-	data, _, err := parse(mdPath)
+	meta, err := parse(mdPath)
+	data := meta.data
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,8 @@ This is outdated
 `
 	os.WriteFile(mdPath, []byte(content), 0644)
 
-	data, _, err := parse(mdPath)
+	meta, err := parse(mdPath)
+	data := meta.data
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +114,8 @@ Normal comment
 `
 	os.WriteFile(mdPath, []byte(content), 0644)
 
-	data, _, err := parse(mdPath)
+	meta, err := parse(mdPath)
+	data := meta.data
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +130,8 @@ Normal comment
 }
 
 func TestParse_NonexistentFile(t *testing.T) {
-	data, _, err := parse("/nonexistent/REVIEW.md")
+	meta, err := parse("/nonexistent/REVIEW.md")
+	data := meta.data
 	if err != nil {
 		t.Fatal("expected no error for nonexistent file")
 	}

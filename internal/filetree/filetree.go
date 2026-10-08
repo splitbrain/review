@@ -21,6 +21,11 @@ type Entry struct {
 // reviewed directory. It is not part of what is under review.
 const reviewFile = "REVIEW.md"
 
+// reviewHistoryDir holds retired reviews, beside the review file at the root.
+// Only a directory of this name at the root is the tool's own, not one deeper
+// in the project.
+const reviewHistoryDir = ".review-history"
+
 // ignoredDirs are directory names never included in the tree, whether it is
 // built from git or by walking the filesystem. Version control metadata
 // directories are listed here because their contents are not source code the
@@ -77,6 +82,10 @@ func gitLsFiles(root string) ([]string, error) {
 	var files []string
 	for _, path := range strings.Split(string(out), "\x00") {
 		if path == "" || path == reviewFile {
+			continue
+		}
+		// Skip the review's own history directory, but only the one at the root
+		if strings.HasPrefix(path, reviewHistoryDir+"/") {
 			continue
 		}
 		// Skip binary extensions
@@ -184,8 +193,9 @@ func walkDir(absDir, relDir string) ([]*Entry, error) {
 	for _, e := range entries {
 		name := e.Name()
 
-		// Skip the review's own file, but only the one at the root
-		if relDir == "" && name == reviewFile {
+		// Skip the review's own file and its history directory, but only the
+		// ones at the root
+		if relDir == "" && (name == reviewFile || name == reviewHistoryDir) {
 			continue
 		}
 

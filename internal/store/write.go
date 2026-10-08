@@ -12,6 +12,18 @@ import (
 // startedFormat is the layout of the review's start date in REVIEW.md.
 const startedFormat = "2006-01-02"
 
+// stampFormat is the layout of the review's creation and modification times,
+// in UTC so that a review carries a reference frame of its own.
+const stampFormat = "2006-01-02T15:04:05Z"
+
+// ReviewInfo records the context a review was made in: the point in history it
+// was taken from, and when it was begun and last written.
+type ReviewInfo struct {
+	Base     string // point in history the review was taken from, empty outside a git repository
+	Created  string // UTC time the review was begun
+	Modified string // UTC time the review was last written
+}
+
 // maxLineLength bounds a single line when reading source or review files, so
 // that a generated or minified file is still read to the end.
 const maxLineLength = 1 << 20
@@ -19,11 +31,20 @@ const maxLineLength = 1 << 20
 // serialize converts the annotation map to a markdown string. The context
 // blocks are written from the context stored with each annotation, which is
 // the code as it looked when the annotation was last in sync with the source.
-func serialize(data map[string]map[int]*Annotation, started string) string {
+func serialize(data map[string]map[int]*Annotation, started string, info ReviewInfo) string {
 	var b strings.Builder
 
 	b.WriteString("# Code Review\n\n")
+	if info.Base != "" {
+		b.WriteString(fmt.Sprintf("_Base: %s_\n", info.Base))
+	}
 	b.WriteString(fmt.Sprintf("_Started: %s_\n", started))
+	if info.Created != "" {
+		b.WriteString(fmt.Sprintf("_Created: %s_\n", info.Created))
+	}
+	if info.Modified != "" {
+		b.WriteString(fmt.Sprintf("_Modified: %s_\n", info.Modified))
+	}
 
 	// Sort file paths
 	paths := make([]string, 0, len(data))

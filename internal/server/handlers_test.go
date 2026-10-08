@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -742,6 +743,109 @@ func TestAnnotations_GetForFile_Empty(t *testing.T) {
 
 	if len(annots) != 0 {
 		t.Errorf("expected empty annotations, got %v", annots)
+	}
+}
+
+// ---- /api/review tests ----
+
+// postAnnotation saves a comment through the API, failing the test if it is
+// not accepted.
+func postAnnotation(t *testing.T, baseURL, path string, line int, comment string) {
+	t.Helper()
+	body := fmt.Sprintf(`{"path":%q,"line":%d,"comment":%q}`, path, line, comment)
+	resp, err := http.Post(baseURL+"/api/annotations", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("failed to set annotation: %d", resp.StatusCode)
+	}
+}
+
+// getJSON fetches a URL and decodes the JSON body into into.
+func getJSON(t *testing.T, url string, into interface{}) {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
+		t.Fatalf("failed to decode %s: %v", url, err)
+	}
+}
+
+// startNewReview calls DELETE /api/review and returns the decoded response.
+func startNewReview(t *testing.T, baseURL string) newReviewResponse {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/review", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 from a new review, got %d", resp.StatusCode)
+	}
+	var out newReviewResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestNewReviewArchivesWithHistory verifies that, with history set up, a new
+// review keeps the old one and reports where it went.
+func TestNewReviewArchivesWithHistory(t *testing.T) {
+	ts, tmpDir, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	if _, err := store.SetupReviewHistory(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	postAnnotation(t, ts.URL, "hello.go", 1, "a comment")
+	out := startNewReview(t, ts.URL)
+
+	if out.Archived == "" {
+		t.Fatal("expected the new review to report where the old one was archived")
+	}
+	archived, err := os.ReadFile(filepath.Join(tmpDir, filepath.FromSlash(out.Archived)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(archived), "a comment") {
+		t.Errorf("archived review lost its comment:\n%s", archived)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "REVIEW.md")); !os.IsNotExist(err) {
+		t.Errorf("expected REVIEW.md to be gone, stat returned %v", err)
+	}
+
+	var anns map[string]annotationObj
+	getJSON(t, ts.URL+"/api/annotations?path=hello.go", &anns)
+	if len(anns) != 0 {
+		t.Errorf("expected an empty review after archiving, got %v", anns)
+	}
+}
+
+// TestNewReviewDeletesWithoutHistory verifies that the default is unchanged:
+// a new review without history deletes the file and reports nothing archived.
+func TestNewReviewDeletesWithoutHistory(t *testing.T) {
+	ts, tmpDir, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	postAnnotation(t, ts.URL, "hello.go", 1, "a comment")
+	out := startNewReview(t, ts.URL)
+
+	if out.Archived != "" {
+		t.Errorf("expected nothing archived, got %q", out.Archived)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "REVIEW.md")); !os.IsNotExist(err) {
+		t.Errorf("expected REVIEW.md to be deleted, stat returned %v", err)
 	}
 }
 

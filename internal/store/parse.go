@@ -18,24 +18,37 @@ var (
 	lineHeaderRe  = regexp.MustCompile(`^#### Line (\d+)(.*)$`)
 	contextLineRe = regexp.MustCompile(`^(\d+):(?: (.*))?$`)
 	startedRe     = regexp.MustCompile(`^_Started: (.+)_$`)
+	baseRe        = regexp.MustCompile(`^_Base: (.+)_$`)
+	createdRe     = regexp.MustCompile(`^_Created: (.+)_$`)
+	modifiedRe    = regexp.MustCompile(`^_Modified: (.+)_$`)
 	fenceRe       = regexp.MustCompile("^(`{3,}|~{3,})")
 )
 
-// parse reads a REVIEW.md file and returns the annotation map together with
-// the date the review was started, which is empty for a file that does not
-// record one.
+// reviewMeta is what a REVIEW.md records about the review itself: where it was
+// taken from and when it was begun and last written. All fields are empty for
+// a file that records none of them.
+type reviewMeta struct {
+	data     map[string]map[int]*Annotation
+	started  string
+	base     string
+	created  string
+	modified string
+}
+
+// parse reads a REVIEW.md file and returns the annotations together with the
+// review's own record, which is empty for a file that carries none.
 //
 // Comments are kept as the reviewer wrote them, so the document's own
 // structure is only recognised outside fenced code blocks: a heading in a
 // comment's code sample is part of the comment. A horizontal rule separates
 // sections only where a file heading follows it.
-func parse(path string) (map[string]map[int]*Annotation, string, error) {
+func parse(path string) (reviewMeta, error) {
 	lines, err := readLines(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]map[int]*Annotation), "", nil
+			return reviewMeta{data: make(map[string]map[int]*Annotation)}, nil
 		}
-		return nil, "", err
+		return reviewMeta{}, err
 	}
 
 	data := make(map[string]map[int]*Annotation)
@@ -46,7 +59,7 @@ func parse(path string) (map[string]map[int]*Annotation, string, error) {
 	marked := usesContextMarker(lines)
 
 	var (
-		started     string
+		meta        reviewMeta
 		currentFile string
 		currentLine int
 		outdated    bool
@@ -113,18 +126,37 @@ func parse(path string) (map[string]map[int]*Annotation, string, error) {
 		}
 
 		if !collecting {
-			if started == "" {
-				if m := startedRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-					started = m[1]
-				}
-			}
+			readMeta(&meta, strings.TrimSpace(line))
 			continue
 		}
 		body = append(body, unescapeStructure(line))
 	}
 	save()
 
-	return data, started, nil
+	meta.data = data
+	return meta, nil
+}
+
+// readMeta records a metadata line, of the form _Name: value_. Each field is
+// kept at the first value seen, so the document's header wins over anything
+// similar that follows.
+func readMeta(meta *reviewMeta, line string) {
+	for _, f := range []struct {
+		re   *regexp.Regexp
+		into *string
+	}{
+		{startedRe, &meta.started},
+		{baseRe, &meta.base},
+		{createdRe, &meta.created},
+		{modifiedRe, &meta.modified},
+	} {
+		if *f.into != "" {
+			continue
+		}
+		if m := f.re.FindStringSubmatch(line); m != nil {
+			*f.into = m[1]
+		}
+	}
 }
 
 // splitBody separates an annotation's comment from the context block closing

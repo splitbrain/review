@@ -90,17 +90,42 @@ func TestOwnDeletionIsNotReported(t *testing.T) {
 	}
 	drainEvents(w)
 
-	// What the "New Review" endpoint does
-	if err := os.Remove(st.MdPath()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.Reload(); err != nil {
+	// What the "New Review" endpoint does without review history.
+	if _, err := st.ArchiveReview(); err != nil {
 		t.Fatal(err)
 	}
 
 	select {
 	case ev := <-w.Events():
 		t.Errorf("own deletion reported as %q", ev.Type)
+	case <-time.After(1500 * time.Millisecond):
+	}
+}
+
+// TestOwnArchiveToHistoryIsNotReported verifies that retiring a review into
+// the history directory is not reported as one lost behind our back.
+func TestOwnArchiveToHistoryIsNotReported(t *testing.T) {
+	st, w, dir := newTestWatcher(t)
+
+	if err := st.Set("a.go", 2, "a comment"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, ".review-history"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	drainEvents(w)
+
+	dest, err := st.ArchiveReview()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dest == "" {
+		t.Fatal("expected the review to be archived")
+	}
+
+	select {
+	case ev := <-w.Events():
+		t.Errorf("own archive reported as %q", ev.Type)
 	case <-time.After(1500 * time.Millisecond):
 	}
 }

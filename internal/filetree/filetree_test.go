@@ -248,6 +248,30 @@ func TestWalkKeepsNestedReviewFile(t *testing.T) {
 	}
 }
 
+// TestWalkKeepsNestedHistoryDir verifies that only the history directory at the
+// root is hidden, not one that belongs to the project.
+func TestWalkKeepsNestedHistoryDir(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		".review-history/REVIEW-2026-10-08-153000.md": "a retired review of ours",
+		"docs/.review-history/notes.md":               "a note of the project",
+		"main.go":                                     "package main",
+	})
+
+	tree, err := walkDir(root, "")
+	if err != nil {
+		t.Fatalf("walkDir failed: %v", err)
+	}
+
+	names := entryPaths(tree)
+	if names[".review-history"] {
+		t.Error("expected the root history directory to be excluded")
+	}
+	if !names["docs/.review-history"] {
+		t.Errorf("expected docs/.review-history in tree, got %v", names)
+	}
+}
+
 // TestInIgnoredDir verifies that the directories left out of the tree are
 // recognised anywhere along a path, but not in a file's own name.
 func TestInIgnoredDir(t *testing.T) {

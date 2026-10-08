@@ -17,6 +17,8 @@
     editingLine: null,
     gitStatuses: {},
     wsConnected: false,
+    historyEnabled: false, // retired reviews are kept rather than deleted
+    historyDest: '',       // where the current review would be moved on the next one
   };
 
   let ws = null;
@@ -205,13 +207,20 @@
   async function loadConfig() {
     try {
       const config = await api('GET', '/api/config');
-      if (config.base && statusBase) {
-        statusBase.textContent = 'compared to ' + config.base;
-        statusBase.title = 'Changes are highlighted relative to ' + config.base;
-        statusBase.style.display = '';
-      }
+      applyConfig(config);
     } catch (e) {
       console.error('Failed to load config:', e);
+    }
+  }
+
+  // Apply the review settings the config endpoint returned.
+  function applyConfig(config) {
+    state.historyEnabled = !!config.historyEnabled;
+    state.historyDest = config.historyDest || '';
+    if (config.base && statusBase) {
+      statusBase.textContent = 'compared to ' + config.base;
+      statusBase.title = 'Changes are highlighted relative to ' + config.base;
+      statusBase.style.display = '';
     }
   }
 
@@ -859,16 +868,41 @@
     diffTooltipBounds = null;
   }
 
-  // Start a new review (delete REVIEW.md)
+  // Start a new review, moving the current one into the review history when
+  // it is set up and deleting it otherwise.
   async function newReview() {
-    if (!confirm('Start a new review? This will delete all existing comments.')) return;
+    // History may have been set up outside this page, and the destination is
+    // dated on retirement, so the settings are read fresh for the prompt.
     try {
-      await api('DELETE', '/api/review');
+      applyConfig(await api('GET', '/api/config'));
+    } catch (e) {
+      console.error('Failed to reload config:', e);
+    }
+
+    let question;
+    if (state.historyEnabled && state.historyDest) {
+      question = 'Start a new review? The current REVIEW.md will be moved to ' +
+        state.historyDest + '. Confirm?';
+    } else if (state.historyEnabled) {
+      question = 'Start a new review? Confirm?';
+    } else {
+      question = 'Start a new review? This will delete all existing comments.';
+    }
+    if (!confirm(question)) return;
+
+    try {
+      const result = await api('DELETE', '/api/review');
       state.allAnnotations = {};
       state.annotations = {};
       clearCommentMarkers();
       annotationsChanged();
-      showToast('New review started');
+      if (result.archived) {
+        showToast('New review started — the old one was moved to ' + result.archived);
+      } else {
+        showToast('New review started');
+      }
+      // Refresh the destination named for the next review.
+      loadConfig();
     } catch (e) {
       showToast('Failed to start new review: ' + e.message, true);
     }

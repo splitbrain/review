@@ -36,9 +36,17 @@ func main() {
 		os.Exit(2)
 	}
 
+	// The setup-review-history subcommand needs no server and no base revision.
+	setupHistory := flag.Arg(0) == "setup-review-history"
+
 	rootDir, err := filepath.Abs(*dir)
 	if err != nil {
 		log.Fatalf("Failed to resolve directory: %v", err)
+	}
+
+	if setupHistory {
+		runSetupReviewHistory(rootDir)
+		return
 	}
 
 	var baseCommit gitstatus.Base
@@ -54,6 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load review data: %v", err)
 	}
+	st.SetBase(baseCommit.Summary(rootDir))
 
 	// Run initial drift check on all annotated files
 	drifted, err := st.CheckAllDrift()
@@ -118,12 +127,31 @@ func main() {
 	}
 }
 
+// runSetupReviewHistory enables review history for the project at rootDir and
+// reports what it created.
+func runSetupReviewHistory(rootDir string) {
+	created, err := store.SetupReviewHistory(rootDir)
+	if err != nil {
+		log.Fatalf("Failed to set up review history: %v", err)
+	}
+	if len(created) == 0 {
+		fmt.Println("Review history already set up")
+		return
+	}
+	for _, path := range created {
+		fmt.Printf("Created %s\n", path)
+	}
+	fmt.Println("Starting a new review will now move REVIEW.md into " + store.ReviewDir + "/")
+}
+
 // usage prints the command line syntax, including the optional base revision
 // that the flag package does not know about.
 func usage() {
 	out := flag.CommandLine.Output()
-	fmt.Fprintf(out, "Usage: %s [flags] [base]\n\n", filepath.Base(os.Args[0]))
+	fmt.Fprintf(out, "Usage: %s [flags] [base]\n", filepath.Base(os.Args[0]))
+	fmt.Fprintf(out, "       %s [flags] setup-review-history\n\n", filepath.Base(os.Args[0]))
 	fmt.Fprint(out, "  base\n    \tBranch, tag or commit to compare against instead of HEAD\n")
+	fmt.Fprint(out, "  setup-review-history\n    \tEnable review history: keep retired reviews in "+store.ReviewDir+"/\n")
 	flag.PrintDefaults()
 }
 

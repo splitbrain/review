@@ -40,6 +40,54 @@ func (b Base) rev() string {
 	return b.Commit
 }
 
+// Summary describes the point a review is taken from, for the record written
+// in REVIEW.md: the revision the user gave, the commit it resolved to, the
+// first line of that commit's message and whether the tree has changes beyond
+// it. An empty result means the directory is not a git repository.
+func (b Base) Summary(dir string) string {
+	commit := b.Commit
+	rev := b.Rev
+	if commit == "" {
+		head, err := gitLine(dir, "rev-parse", "HEAD")
+		if err != nil {
+			return ""
+		}
+		commit = head
+	}
+	if rev == "" {
+		rev = "HEAD"
+	}
+
+	subject, _ := gitLine(dir, "log", "-1", "--format=%s", commit)
+	summary := fmt.Sprintf("%s (%s) — %s", commit, rev, subject)
+	if dirty(dir, commit) {
+		summary += " [dirty changeset]"
+	}
+	return summary
+}
+
+// gitLine runs a git command in dir and returns its first line of output.
+func gitLine(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// dirty reports whether the tree differs from commit, in files or in the index.
+func dirty(dir, commit string) bool {
+	cmd := exec.Command("git", "status", "--porcelain", "-uall")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return len(strings.TrimSpace(string(out))) > 0
+}
+
 // ResolveBase determines the commit to compare a review against for a
 // user-supplied revision such as a branch name, tag or commit ID. The merge
 // base of that revision and HEAD is used, so commits made on the base branch

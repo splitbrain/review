@@ -37,6 +37,9 @@ type Store struct {
 	srcRoot  string
 	data     map[string]map[int]*Annotation
 	started  string // date the review was started, as recorded in REVIEW.md
+	created  string // UTC time the review was begun, as recorded in REVIEW.md
+	modified string // UTC time the review was last written, as recorded in REVIEW.md
+	base     string // point in history the review was taken from, from the caller
 	mu       sync.RWMutex
 	onChange []func()
 }
@@ -52,17 +55,28 @@ func Load(mdPath, srcRoot string) (*Store, error) {
 		return nil, fmt.Errorf("resolve src root: %w", err)
 	}
 
-	data, started, err := parse(abs)
+	meta, err := parse(abs)
 	if err != nil {
 		return nil, fmt.Errorf("parse REVIEW.md: %w", err)
 	}
 
 	return &Store{
-		mdPath:  abs,
-		srcRoot: srcAbs,
-		data:    data,
-		started: started,
+		mdPath:   abs,
+		srcRoot:  srcAbs,
+		data:     meta.data,
+		started:  meta.started,
+		created:  meta.created,
+		modified: meta.modified,
 	}, nil
+}
+
+// SetBase records the point in history the review is taken from, so a review
+// file left behind can be read back in context. It is refreshed on the next
+// write, which happens as soon as an annotation is made.
+func (s *Store) SetBase(base string) {
+	s.mu.Lock()
+	s.base = base
+	s.mu.Unlock()
 }
 
 // OnChange registers a callback that fires after any mutation (Set/Delete).
@@ -189,13 +203,19 @@ func (s *Store) Reload() (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, started, err := parse(s.mdPath)
+	meta, err := parse(s.mdPath)
 	if err != nil {
 		return false, fmt.Errorf("parse REVIEW.md: %w", err)
 	}
-	changed := !equalAnnotations(s.data, data)
-	s.data = data
-	s.started = started
+	changed := !equalAnnotations(s.data, meta.data)
+	s.data = meta.data
+	s.started = meta.started
+	// Adopt the times the file records, so a review written by someone else is
+	// read back with its own history rather than this process's. The base is
+	// not adopted: it belongs to the invocation, and overwriting it would
+	// mislabel the very next write.
+	s.created = meta.created
+	s.modified = meta.modified
 	return changed, nil
 }
 
@@ -228,10 +248,17 @@ func (s *Store) Flush() error {
 
 // flush serialises the map and atomically writes REVIEW.md.
 func (s *Store) flush() error {
+	now := time.Now().UTC()
 	if s.started == "" {
-		s.started = time.Now().Format(startedFormat)
+		s.started = now.Format(startedFormat)
 	}
-	content := serialize(s.data, s.started)
+	if s.created == "" {
+		s.created = now.Format(stampFormat)
+	}
+	s.modified = now.Format(stampFormat)
+
+	info := ReviewInfo{Base: s.base, Created: s.created, Modified: s.modified}
+	content := serialize(s.data, s.started, info)
 	tmp := s.mdPath + ".tmp"
 
 	if err := os.WriteFile(tmp, []byte(content), 0644); err != nil {

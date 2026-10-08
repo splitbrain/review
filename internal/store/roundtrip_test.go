@@ -187,7 +187,8 @@ func TestParse_LegacyFileWithoutContext(t *testing.T) {
 		"#### Line 1\n\nfirst comment\n\n#### Line 5\n\nsecond comment\n\n---\n\n## `b.go`\n\n#### Line 2\n\nthird comment\n"
 	os.WriteFile(mdPath, []byte(content), 0644)
 
-	data, started, err := parse(mdPath)
+	meta, err := parse(mdPath)
+	data, started := meta.data, meta.started
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +265,8 @@ func TestParse_UnmarkedContextStillRead(t *testing.T) {
 		"#### Line 5 (outdated)\n\nan older comment\n\n```go\n4: was here\n5: and here\n```\n"
 	os.WriteFile(mdPath, []byte(content), 0644)
 
-	data, _, err := parse(mdPath)
+	meta, err := parse(mdPath)
+	data := meta.data
 	if err != nil {
 		t.Fatal(err)
 	}

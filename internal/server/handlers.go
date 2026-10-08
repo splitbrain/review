@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -192,11 +193,17 @@ func (h *handlers) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 
 // configResponse is the JSON shape for the review's global settings.
 type configResponse struct {
-	Base string `json:"base"` // revision changes are compared against, empty when comparing against HEAD
+	Base           string `json:"base"`                  // revision changes are compared against, empty when comparing against HEAD
+	HistoryEnabled bool   `json:"historyEnabled"`        // whether starting a new review archives the old one instead of deleting it
+	HistoryDest    string `json:"historyDest,omitempty"` // where the current review would be archived, relative to the review root
 }
 
 func (h *handlers) handleConfig(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, configResponse{Base: h.base.Rev})
+	resp := configResponse{Base: h.base.Rev, HistoryEnabled: h.store.HistoryEnabled()}
+	if dest, ok := h.store.NextHistoryDest(); ok {
+		resp.HistoryDest = dest
+	}
+	jsonResponse(w, resp)
 }
 
 func (h *handlers) handleGitStatus(w http.ResponseWriter, r *http.Request) {
@@ -214,18 +221,30 @@ func (h *handlers) handleGitStatus(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, result)
 }
 
+// newReviewResponse reports what starting a new review did with the old one.
+type newReviewResponse struct {
+	Status   string `json:"status"`
+	Archived string `json:"archived,omitempty"` // path of the retired review, empty when it was deleted
+}
+
 func (h *handlers) handleDeleteReview(w http.ResponseWriter, r *http.Request) {
-	mdPath := h.store.MdPath()
-	if err := os.Remove(mdPath); err != nil && !os.IsNotExist(err) {
-		jsonError(w, fmt.Sprintf("failed to delete: %v", err), http.StatusInternalServerError)
+	dest, err := h.store.ArchiveReview()
+	if err != nil {
+		jsonError(w, fmt.Sprintf("failed to start a new review: %v", err), http.StatusInternalServerError)
 		return
 	}
-	// Reload store (now empty)
-	if _, err := h.store.Reload(); err != nil {
-		jsonError(w, fmt.Sprintf("failed to reload: %v", err), http.StatusInternalServerError)
-		return
+
+	resp := newReviewResponse{Status: "ok"}
+	if dest != "" {
+		// The path is relative to the review root, like every other path the
+		// client sees.
+		if rel, err := filepath.Rel(h.rootDir, dest); err == nil {
+			resp.Archived = filepath.ToSlash(rel)
+		} else {
+			resp.Archived = dest
+		}
 	}
-	jsonResponse(w, map[string]string{"status": "ok"})
+	jsonResponse(w, resp)
 }
 
 func (h *handlers) handleChromaCSS(w http.ResponseWriter, r *http.Request) {

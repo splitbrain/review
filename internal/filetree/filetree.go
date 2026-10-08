@@ -110,7 +110,27 @@ type dirNode struct {
 	children map[string]*dirNode
 }
 
-// buildTreeFromPaths builds a tree structure from a flat list of file paths.
+// FromPaths builds a tree from a flat list of repository-relative paths, using
+// the same filtering (ignored dirs/extensions, REVIEW.md) as Walk. It lets
+// callers feed a virtual tree (e.g. the file list at a historical revision)
+// without a filesystem walk.
+func FromPaths(paths []string) []*Entry {
+	var files []string
+	for _, path := range paths {
+		if path == "" || path == reviewFile {
+			continue
+		}
+		if ignoredExts[strings.ToLower(filepath.Ext(path))] {
+			continue
+		}
+		if inIgnoredDir(path) {
+			continue
+		}
+		files = append(files, path)
+	}
+	return buildTreeFromPaths(files)
+}
+
 func buildTreeFromPaths(paths []string) []*Entry {
 	root := &dirNode{children: make(map[string]*dirNode)}
 

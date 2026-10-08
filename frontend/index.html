@@ -22,6 +22,12 @@
 
     <!-- Code View -->
     <main class="code-view">
+      <div class="commit-bar" id="commit-bar">
+        <button class="secondary" id="commit-prev" title="Newer (toward HEAD)">&#9664;</button>
+        <select id="commit-select" title="Choose the revision to review"></select>
+        <button class="secondary" id="commit-next" title="Older">&#9654;</button>
+        <span id="commit-subject" class="commit-subject"></span>
+      </div>
       <div id="code-header" class="code-header">
         <span class="file-path">Select a file to review</span>
       </div>

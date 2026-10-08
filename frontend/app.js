@@ -17,6 +17,12 @@
     editingLine: null,
     gitStatuses: {},
     wsConnected: false,
+    // History review: commits from the base to HEAD (newest first), the
+    // selected commit's hash ('' = working tree), and a per-rev cache of tree
+    // and statuses so stepping back and forth is instant.
+    commits: [],
+    rev: '',
+    revCache: {},
   };
 
   let ws = null;
@@ -26,7 +32,8 @@
   // DOM references
   let treePane, treeContainer, codeContent, codeHeader, commentList, commentEditor,
       editorTextarea, editorLineLabel, statusCommentCount, statusMdPath,
-      statusBase, wsIndicator, toastContainer;
+      statusBase, wsIndicator, toastContainer,
+      commitBar, commitSelect, commitPrev, commitNext, commitSubject;
 
   // Initialize
   document.addEventListener('DOMContentLoaded', () => {
@@ -43,10 +50,17 @@
     statusBase = document.getElementById('status-base');
     wsIndicator = document.getElementById('ws-indicator');
     toastContainer = document.getElementById('toast-container');
+    commitBar = document.getElementById('commit-bar');
+    commitSelect = document.getElementById('commit-select');
+    commitPrev = document.getElementById('commit-prev');
+    commitNext = document.getElementById('commit-next');
+    commitSubject = document.getElementById('commit-subject');
 
     attachCodeViewHandlers();
+    attachCommitHandlers();
 
     loadConfig();
+    loadCommits();
     loadTree();
     loadAllAnnotations();
     connectWebSocket();
@@ -59,6 +73,13 @@
   });
 
   // API helpers
+  // withRev appends the currently selected revision to an API path, so tree,
+  // statuses and file content are all read at the same commit.
+  function withRev(path) {
+    if (!state.rev) return path;
+    return path + (path.includes('?') ? '&' : '?') + 'rev=' + encodeURIComponent(state.rev);
+  }
+
   async function api(method, path, body) {
     const opts = { method, headers: {} };
     if (body) {
@@ -205,6 +226,7 @@
   async function loadConfig() {
     try {
       const config = await api('GET', '/api/config');
+      state.baseRev = config.base || '';
       if (config.base && statusBase) {
         statusBase.textContent = 'compared to ' + config.base;
         statusBase.title = 'Changes are highlighted relative to ' + config.base;
@@ -215,13 +237,121 @@
     }
   }
 
+  // Load the commit history (base..HEAD, newest first) and build the selector.
+  // Entry 0 is the aggregate view — the base diffed against the working tree,
+  // i.e. one net diff over every commit in the range (what you want when a
+  // change is made and reverted across commits) — and the remaining entries are
+  // the individual commits, newest first, for optional drill-down. History
+  // review only makes sense against a base ref, so the bar stays hidden without
+  // one.
+  async function loadCommits() {
+    let base = '';
+    try {
+      const data = await api('GET', '/api/commits');
+      state.commits = data.commits || [];
+      base = data.base || '';
+    } catch (e) {
+      console.error('Failed to load commits:', e);
+      state.commits = [];
+    }
+    if (!base) {
+      // No base range: history review is not applicable, hide the bar.
+      state.commits = [];
+      commitBar.style.display = 'none';
+      return;
+    }
+    renderCommitBar();
+  }
+
+  // aggregateLabel describes the default view, which diffs the base commit
+  // against the working tree: one net diff over every commit in the range
+  // (plus uncommitted work), so a change made and reverted is not shown.
+  function aggregateLabel() {
+    const n = state.commits.length;
+    if (!n) return 'all changes since ' + (state.baseRev || 'the base');
+    return 'all ' + n + ' commit' + (n === 1 ? '' : 's') +
+           ' since ' + (state.baseRev || 'the base') + ' (net diff)';
+  }
+
+  function renderCommitBar() {
+    commitSelect.innerHTML = '';
+    const wt = document.createElement('option');
+    wt.value = '';
+    wt.textContent = 'All changes (' + (state.baseRev || 'base') + ' → working tree)';
+    commitSelect.appendChild(wt);
+    state.commits.forEach((c, i) => {
+      const o = document.createElement('option');
+      o.value = c.hash;
+      o.textContent = c.short + '  ' + c.subject;
+      commitSelect.appendChild(o);
+    });
+    commitSelect.value = state.rev || '';
+    updateCommitNav();
+  }
+
+  function commitIndex() {
+    if (!state.rev) return 0;
+    const i = state.commits.findIndex(c => c.hash === state.rev);
+    return i < 0 ? -1 : i + 1; // +1 for the working-tree entry at index 0
+  }
+
+  function updateCommitNav() {
+    const i = commitIndex();
+    commitPrev.disabled = i <= 0;                 // toward HEAD
+    commitNext.disabled = i < 0 || i >= state.commits.length; // older
+    const c = i > 0 ? state.commits[i - 1] : null;
+    commitSubject.textContent = c ? c.subject : aggregateLabel();
+    if (statusBase) {
+      statusBase.style.display = '';
+      statusBase.textContent = c ? ('reviewing ' + c.short)
+                                 : 'compared to ' + (state.baseRev || 'HEAD');
+    }
+  }
+
+  function attachCommitHandlers() {
+    if (!commitBar) return;
+    commitSelect.addEventListener('change', () => selectCommit(commitSelect.value));
+    commitPrev.addEventListener('click', () => stepCommit(-1));
+    commitNext.addEventListener('click', () => stepCommit(1));
+  }
+
+  function stepCommit(delta) {
+    const i = commitIndex();
+    if (i < 0) return;
+    const ni = i + delta;
+    if (ni < 0 || ni > state.commits.length) return;
+    selectCommit(ni === 0 ? '' : state.commits[ni - 1].hash);
+  }
+
+  // Switch the entire view to a commit ('' = working tree). Committed views are
+  // cached per rev so stepping back and forth is instant; working-tree views
+  // are always refetched since they change on disk.
+  async function selectCommit(rev) {
+    state.rev = rev || '';
+    commitSelect.value = state.rev;
+    updateCommitNav();
+    state.currentFile = null;
+    state.scrollPositions = {};
+    if (state.rev && state.revCache[state.rev]) {
+      const c = state.revCache[state.rev];
+      state.tree = c.tree;
+      state.gitStatuses = c.gitStatuses;
+      renderTree();
+    } else {
+      await loadTree();
+      if (state.rev) state.revCache[state.rev] = { tree: state.tree, gitStatuses: state.gitStatuses };
+    }
+    codeHeader.innerHTML = '<span class="file-path">Select a file to review</span>';
+    codeContent.innerHTML = '<div class="empty-state"><p>Select a file from the tree to review.</p></div>';
+  }
+
   // Load the file tree together with the git status it is coloured by, so the
   // two are always drawn from the same view of the project.
   async function loadTree() {
     try {
       const [tree, gitStatuses] = await Promise.all([
-        api('GET', '/api/tree'),
-        api('GET', '/api/git-status'),
+        api('GET', withRev('/api/tree')),
+        api('GET', withRev('/api/git-status')),
       ]);
       state.tree = tree;
       state.gitStatuses = gitStatuses;
@@ -376,7 +506,7 @@
     if (!path) return;
 
     const [fileData, annData] = await Promise.all([
-      api('GET', '/api/file?path=' + encodeURIComponent(path)),
+      api('GET', withRev('/api/file?path=' + encodeURIComponent(path))),
       annotations || api('GET', '/api/annotations?path=' + encodeURIComponent(path)),
     ]);
     // Another file was opened while this one was loading

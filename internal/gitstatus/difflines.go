@@ -88,6 +88,24 @@ func GetFileDiff(dir string, base Base, filePath string, content []byte) *FileDi
 	return &FileDiffInfo{}
 }
 
+// GetFileDiffAt diffs a file between two revisions (e.g. a commit and its
+// parent). If the file does not exist at fromRev, every line is marked added.
+// Unlike GetFileDiff it always uses the revision range, never the working tree.
+func GetFileDiffAt(dir, fromRev, toRev, filePath string, content []byte) *FileDiffInfo {
+	cmd := exec.Command("git", "diff", fromRev, toRev,
+		"--unified="+strconv.Itoa(diffContext), "--no-color", "--", filePath)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err == nil && len(out) > 0 {
+		return parseDiff(out)
+	}
+	// No diff output: added (absent at fromRev) or unchanged.
+	if _, e := Show(dir, fromRev, filePath); e != nil {
+		return &FileDiffInfo{Lines: allLinesAdded(content)}
+	}
+	return &FileDiffInfo{}
+}
+
 // parseDiff turns unified diff output for a single file into the line markers,
 // hunks and deletion markers the frontend draws.
 //

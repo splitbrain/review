@@ -581,6 +581,39 @@ body {
   background: rgba(220, 38, 38, 0.1);
 }
 
+/* Commit history bar (review a specific commit vs. its parent) */
+.commit-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel, rgba(127, 127, 127, 0.06));
+  font-size: 0.8rem;
+}
+.commit-bar button {
+  padding: 0.2rem 0.5rem;
+  line-height: 1;
+}
+.commit-bar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.commit-bar select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 34rem;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.4rem;
+}
+.commit-subject {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .app-layout {

@@ -21,15 +21,57 @@ type handlers struct {
 	rootDir     string
 	base        gitstatus.Base
 	highlighter *highlight.Cache
+	// rev, when non-empty, is the exact revision (commit) whose content the
+	// file/tree endpoints serve. It powers line-by-line history review: the
+	// frontend selects a commit and the server shows that commit's tree,
+	// diffed against its parent. Empty = working tree (the original mode).
+	rev string
 }
 
 func (h *handlers) handleTree(w http.ResponseWriter, r *http.Request) {
+	if rev := r.URL.Query().Get("rev"); rev != "" && validRev(rev) {
+		files, err := gitstatus.TreeAt(h.rootDir, rev)
+		if err != nil {
+			jsonError(w, "failed to read tree at revision", http.StatusInternalServerError)
+			return
+		}
+		jsonResponse(w, filetree.FromPaths(files))
+		return
+	}
 	tree, err := filetree.Walk(h.rootDir)
 	if err != nil {
 		jsonError(w, "failed to walk directory", http.StatusInternalServerError)
 		return
 	}
 	jsonResponse(w, tree)
+}
+
+// validRev rejects revisions that could be read as a git option or path. The
+// value is passed as a git argument (never a shell), but a leading dash or a
+// ".." range separator is never a valid single commit, so refusing them keeps
+// the surface tight.
+func validRev(rev string) bool {
+	if rev == "" || strings.HasPrefix(rev, "-") {
+		return false
+	}
+	if strings.ContainsAny(rev, " \t\n") {
+		return false
+	}
+	return true
+}
+
+type commitsResponse struct {
+	Base    string             `json:"base"` // revision the history starts after
+	Commits []gitstatus.Commit `json:"commits"`
+}
+
+func (h *handlers) handleCommits(w http.ResponseWriter, r *http.Request) {
+	commits, err := gitstatus.History(h.rootDir, h.base)
+	if err != nil {
+		jsonError(w, "failed to read history", http.StatusInternalServerError)
+		return
+	}
+	jsonResponse(w, commitsResponse{Base: h.base.Rev, Commits: commits})
 }
 
 // maxFileSize is the largest file the server reads into memory and hands to
@@ -52,6 +94,49 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		jsonError(w, "path parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Historical mode: serve the file's content at a commit and diff it
+	// against that commit's parent (its virtual tree, no checkout).
+	if rev := r.URL.Query().Get("rev"); rev != "" {
+		if !validRev(rev) {
+			jsonError(w, "invalid rev", http.StatusBadRequest)
+			return
+		}
+		absPath, ok := h.resolvePath(path)
+		if !ok {
+			jsonError(w, "invalid path", http.StatusBadRequest)
+			return
+		}
+		content, err := gitstatus.Show(h.rootDir, rev, path)
+		if err != nil {
+			// Not present at this revision; fall back to the working-tree
+			// content so a path from the tree still opens.
+			content, err = os.ReadFile(absPath)
+			if err != nil {
+				jsonError(w, "file not found", http.StatusNotFound)
+				return
+			}
+		}
+		if len(content) > maxFileSize {
+			jsonError(w, "file is too large to display", http.StatusRequestEntityTooLarge)
+			return
+		}
+		if isBinary(content) {
+			jsonError(w, "binary file", http.StatusBadRequest)
+			return
+		}
+		hl := h.highlighter.Highlight(path, string(content))
+		parent := gitstatus.ParentOf(h.rootDir, rev)
+		diff := gitstatus.GetFileDiffAt(h.rootDir, parent, rev, path, content)
+		jsonResponse(w, fileResponse{
+			HTML:          hl.HTML,
+			Language:      hl.Language,
+			DiffLines:     diff.Lines,
+			DiffHunks:     diff.Hunks,
+			DiffDeletions: diff.Deletions,
+		})
 		return
 	}
 
@@ -200,7 +285,13 @@ func (h *handlers) handleConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) handleGitStatus(w http.ResponseWriter, r *http.Request) {
-	statuses := gitstatus.Get(h.rootDir, h.base)
+	var statuses gitstatus.FileStatuses
+	if rev := r.URL.Query().Get("rev"); rev != "" && validRev(rev) {
+		parent := gitstatus.ParentOf(h.rootDir, rev)
+		statuses = gitstatus.StatusBetween(h.rootDir, parent, rev)
+	} else {
+		statuses = gitstatus.Get(h.rootDir, h.base)
+	}
 	if statuses == nil {
 		// Not a git repo — return empty object
 		jsonResponse(w, map[string]string{})

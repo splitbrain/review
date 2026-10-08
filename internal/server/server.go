@@ -43,6 +43,7 @@ func New(st *store.Store, rootDir string, base gitstatus.Base, frontendFS fs.FS,
 
 	// API routes
 	r.Get("/api/tree", h.handleTree)
+	r.Get("/api/commits", h.handleCommits)
 	r.Get("/api/file", h.handleFile)
 	r.Get("/api/annotations", h.handleGetAnnotations)
 	r.Post("/api/annotations", h.handleSetAnnotation)

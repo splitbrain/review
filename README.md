@@ -7,7 +7,7 @@ The tool was vibecoded as a simple way to review agentic coded files. The markdo
 ## Features
 
 - **File tree navigation** — browse the project with expandable directories
-- **Inline annotations** — click any line to add, edit, or delete review comments
+- **Inline annotations** — click any line to add, edit, or delete review comments, or highlight several lines to comment on a range
 - **Syntax highlighting** — powered by [Chroma](https://github.com/alecthomas/chroma)
 - **Git status integration** — files and directories are color-coded by git status (modified, staged, untracked, etc.)
 - **Git diff markers** — changed, added, and deleted lines are marked in the gutter; hover to see the full diff hunk
@@ -95,6 +95,29 @@ The tool exposes a JSON API for the frontend:
 | `GET` | `/api/config` | Review settings, currently the base revision |
 | `DELETE` | `/api/review` | Delete REVIEW.md and start a new review |
 | `GET` | `/ws` | WebSocket for live updates |
+
+### Commenting on a Range of Lines
+
+A comment can cover a run of lines rather than a single one. Highlight the lines
+you want in the code view — drag the mouse across them, or click one line and
+shift-click another — then write the comment as usual. A plain click edits the
+comment already on the line.
+
+The range is sent in [Gerrit's `CommentRange`][comment-range] shape, so a
+comment on lines 10 to 20 of a file reads:
+
+```json
+{ "path": "src/main.go", "line": 20,
+  "range": { "start_line": 10, "end_line": 20 },
+  "comment": "These lines belong together" }
+```
+
+As in Gerrit, the range's end line is what the annotation is keyed by, and
+`line` is taken as that end line. Character offsets are not used: this tool
+comments on whole lines. In `REVIEW.md` a range is written as a `#### Lines
+10-20` heading, while a single-line comment keeps the `#### Line N` form.
+
+[comment-range]: https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#comment-range
 
 ## License
 

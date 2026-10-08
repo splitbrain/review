@@ -7,14 +7,17 @@
     openDirs: {},
     currentFile: null,
     language: '',
-    annotations: {},      // line → {comment, outdated} for current file
-    allAnnotations: {},   // path → {line → {comment, outdated}} for all files
+    annotations: {},      // end line → {comment, startLine, endLine, outdated} for current file
+    allAnnotations: {},   // path → {end line → {comment, startLine, endLine, outdated}} for all files
     diffLines: {},        // line → "added"|"modified" for current file
     diffHunks: [],        // [{startLine, endLine, diff}] for current file
     diffDeletions: [],    // [{afterLine, hunkIndex}] for current file
     totalLines: 0,        // number of lines in the current file
     scrollPositions: {},  // path → scrollTop of the code view when the file was left
-    editingLine: null,
+    editingLine: null,    // end line of the comment being edited (the annotation's key)
+    selectionStart: null, // first line of the range being selected/edited
+    selectionEnd: null,   // last line of the range being selected/edited
+    anchorLine: null,     // line a shift-click extends the selection from
     gitStatuses: {},
     wsConnected: false,
   };
@@ -474,8 +477,16 @@
     codeContent.addEventListener('click', (e) => {
       const lineEl = e.target.closest('.line');
       if (!lineEl) return;
+      // A drag that highlighted several lines is the range the user means; the
+      // click that ends it must not shrink the comment back to one line.
+      const hl = highlightedLineRange();
+      if (hl && hl[1] > hl[0]) {
+        state.anchorLine = hl[0];
+        beginComment(hl[0], hl[1], true);
+        return;
+      }
       const lineNum = lineNumberOf(lineEl);
-      if (lineNum !== null) clickLine(lineNum);
+      if (lineNum !== null) clickLine(lineNum, e.shiftKey);
     });
 
     codeContent.addEventListener('mouseover', (e) => {
@@ -508,14 +519,19 @@
     }
 
     for (const [lineNum, ann] of Object.entries(state.annotations)) {
-      const lineEl = lineElement(lineNum);
-      if (!lineEl) continue;
-      lineEl.classList.add('has-comment');
-      if (ann.outdated) lineEl.classList.add('has-outdated-comment');
+      const { start, end } = annotationRange(ann, Number(lineNum));
+      for (let n = start; n <= end; n++) {
+        const lineEl = lineElement(n);
+        if (!lineEl) continue;
+        lineEl.classList.add('has-comment');
+        if (ann.outdated) lineEl.classList.add('has-outdated-comment');
+      }
     }
 
-    // Keep the line being commented on marked after a redraw
-    if (state.editingLine) selectLine(lineElement(state.editingLine));
+    // Keep the lines being commented on marked after a redraw
+    if (state.selectionStart && state.selectionEnd) {
+      selectRange(state.selectionStart, state.selectionEnd);
+    }
 
     renderDeletionMarkers();
     renderScrollbarMarkers();
@@ -595,52 +611,160 @@
   }
 
 
-  // Mark a line as the one being commented on. The previous one is remembered
-  // rather than searched for again.
-  let selectedLineEl = null;
-  function selectLine(lineEl) {
-    if (selectedLineEl) selectedLineEl.classList.remove('selected');
-    selectedLineEl = lineEl;
-    if (lineEl) lineEl.classList.add('selected');
+  // The lines a comment covers, in order. The annotation's key is its end line;
+  // startLine is stored alongside it. A comment written before ranges existed
+  // has no start line and covers the end line alone.
+  function annotationRange(ann, endLine) {
+    const end = ann && ann.endLine ? ann.endLine : endLine;
+    let start = ann && ann.startLine ? ann.startLine : end;
+    if (start < 1 || start > end) start = end;
+    return { start, end };
   }
 
-  // Click a line to add/edit comment
-  function clickLine(lineNum) {
-    selectLine(lineElement(lineNum));
+  // The lines currently marked. Remembered so they can be cleared without
+  // walking the file.
+  let selectedLineEls = [];
 
-    state.editingLine = lineNum;
-    const ann = state.annotations[lineNum];
+  // Mark a run of lines as the one being commented on.
+  function selectRange(start, end) {
+    selectedLineEls.forEach(el => el.classList.remove('selected'));
+    selectedLineEls = [];
+    for (let n = start; n <= end; n++) {
+      const el = lineElement(n);
+      if (el) {
+        el.classList.add('selected');
+        selectedLineEls.push(el);
+      }
+    }
+  }
 
-    editorLineLabel.textContent = 'Line ' + lineNum;
+  // Arm the editor for a comment on a run of lines. focusText is set when the
+  // comment follows a click, which is when stealing the caret is wanted; a
+  // mouse highlight is left alone so the selection can still be dragged.
+  function beginComment(start, end, focusText) {
+    state.selectionStart = start;
+    state.selectionEnd = end;
+    state.editingLine = end; // the annotation is keyed by its end line
+    selectRange(start, end);
+
+    const ann = state.annotations[end];
+    editorLineLabel.textContent = start === end ? 'Line ' + end : 'Lines ' + start + '\u2013' + end;
     editorTextarea.value = ann ? ann.comment : '';
     updateEditorVisibility();
-    editorTextarea.focus();
+    if (focusText) editorTextarea.focus();
   }
 
-  // Save comment
+  // Click a line to add or edit a comment, extending it into a range when shift
+  // is held. A plain click falls back on the annotation at the end line it lands
+  // on, so the whole range it covers is what gets edited.
+  function clickLine(lineNum, shiftKey) {
+    let start, end;
+    if (shiftKey && state.anchorLine) {
+      start = Math.min(state.anchorLine, lineNum);
+      end = Math.max(state.anchorLine, lineNum);
+    } else {
+      const existing = state.annotations[lineNum];
+      if (existing) {
+        ({ start, end } = annotationRange(existing, lineNum));
+      } else {
+        start = end = lineNum;
+      }
+      state.anchorLine = lineNum;
+    }
+    beginComment(start, end, true);
+  }
+
+  // The line a DOM node sits on, or null when it is not inside a line.
+  function lineOfNode(node) {
+    if (!node) return null;
+    const el = node.nodeType === 1 ? node : node.parentElement;
+    const lineEl = el && el.closest && el.closest('.line');
+    return lineEl ? lineNumberOf(lineEl) : null;
+  }
+
+  // The line numbers a highlight in the code view covers, or null when there is
+  // no such highlight. Both ends are read off the selected nodes, which is a
+  // lookup each; only a selection whose ends fall outside the lines falls back
+  // to measuring rectangles.
+  function highlightedLineRange() {
+    const sel = document.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+    if (!codeContent.contains(sel.anchorNode) || !codeContent.contains(sel.focusNode)) return null;
+
+    const a = lineOfNode(sel.anchorNode);
+    const b = lineOfNode(sel.focusNode);
+    if (a !== null && b !== null) return [Math.min(a, b), Math.max(a, b)];
+
+    const rects = Array.from(sel.getRangeAt(0).getClientRects());
+    if (rects.length === 0) return null;
+    const top = Math.min(...rects.map(r => r.top));
+    const bottom = Math.max(...rects.map(r => r.bottom));
+    let min = Infinity;
+    let max = -Infinity;
+    codeContent.querySelectorAll('.chroma .line').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.bottom <= top || r.top >= bottom) return;
+      const n = lineNumberOf(el);
+      if (n === null) return;
+      if (n < min) min = n;
+      if (n > max) max = n;
+    });
+    return min === Infinity ? null : [min, max];
+  }
+
+  // A highlight of one or more whole lines becomes the comment's range, so the
+  // review covers exactly what was selected.
+  let highlightSyncFrame = null;
+  function syncCommentToHighlight() {
+    if (!state.currentFile) return;
+    const range = highlightedLineRange();
+    if (!range) return;
+    // Only react when the highlight actually moved, or every caret movement
+    // inside the textarea would reopen the same range.
+    if (range[0] === state.selectionStart && range[1] === state.selectionEnd) return;
+    state.anchorLine = range[0];
+    beginComment(range[0], range[1], false);
+  }
+
+  document.addEventListener('selectionchange', () => {
+    if (highlightSyncFrame) return;
+    highlightSyncFrame = requestAnimationFrame(() => {
+      highlightSyncFrame = null;
+      syncCommentToHighlight();
+    });
+  });
+
+  // Save comment. A comment on more than one line is sent as a Gerrit-style
+  // range: start_line and end_line, with the end line also as the plain line.
   async function saveComment() {
     if (!state.currentFile || !state.editingLine) return;
     const text = editorTextarea.value.trim();
     if (!text) return;
 
-    try {
-      await api('POST', '/api/annotations', {
-        path: state.currentFile,
-        line: state.editingLine,
-        comment: text,
-      });
+    const start = state.selectionStart || state.editingLine;
+    const end = state.editingLine;
+    const body = { path: state.currentFile, line: end, comment: text };
+    if (start !== end) {
+      body.range = { start_line: start, end_line: end };
+    }
 
-      state.annotations[state.editingLine] = { comment: text, outdated: false };
+    try {
+      await api('POST', '/api/annotations', body);
+
+      const ann = { comment: text, startLine: start, endLine: end, outdated: false };
+      state.annotations[end] = ann;
       if (!state.allAnnotations[state.currentFile]) {
         state.allAnnotations[state.currentFile] = {};
       }
-      state.allAnnotations[state.currentFile][state.editingLine] = { comment: text, outdated: false };
+      state.allAnnotations[state.currentFile][end] = ann;
 
-      // Update gutter
-      const lineEl = lineElement(state.editingLine);
-      if (lineEl) {
-        lineEl.classList.add('has-comment');
-        lineEl.classList.remove('has-outdated-comment');
+      // Update gutter across the range
+      for (let n = start; n <= end; n++) {
+        const lineEl = lineElement(n);
+        if (lineEl) {
+          lineEl.classList.add('has-comment');
+          lineEl.classList.remove('has-outdated-comment');
+        }
       }
 
       annotationsChanged();
@@ -653,25 +777,30 @@
   async function deleteComment() {
     if (!state.currentFile || !state.editingLine) return;
 
+    const end = state.editingLine;
     try {
       await api('DELETE', '/api/annotations', {
         path: state.currentFile,
-        line: state.editingLine,
+        line: end,
       });
 
-      delete state.annotations[state.editingLine];
+      const removed = state.annotations[end];
+      const start = removed ? annotationRange(removed, end).start : end;
+      delete state.annotations[end];
       if (state.allAnnotations[state.currentFile]) {
-        delete state.allAnnotations[state.currentFile][state.editingLine];
+        delete state.allAnnotations[state.currentFile][end];
         if (Object.keys(state.allAnnotations[state.currentFile]).length === 0) {
           delete state.allAnnotations[state.currentFile];
         }
       }
 
-      // Update gutter
-      const lineEl = lineElement(state.editingLine);
-      if (lineEl) {
-        lineEl.classList.remove('has-comment');
-        lineEl.classList.remove('has-outdated-comment');
+      // Update gutter across the range
+      for (let n = start; n <= end; n++) {
+        const lineEl = lineElement(n);
+        if (lineEl) {
+          lineEl.classList.remove('has-comment');
+          lineEl.classList.remove('has-outdated-comment');
+        }
       }
 
       annotationsChanged();
@@ -683,7 +812,9 @@
   // Put the editor away, leaving no line marked as being commented on.
   function closeEditor() {
     state.editingLine = null;
-    selectLine(null);
+    state.selectionStart = null;
+    state.selectionEnd = null;
+    selectRange(0, -1);
     updateEditorVisibility();
   }
 
@@ -708,11 +839,13 @@
 
     commentList.innerHTML = lines.map(lineNum => {
       const ann = state.annotations[lineNum];
+      const { start, end } = annotationRange(ann, lineNum);
       const outdatedClass = ann && ann.outdated ? ' comment-outdated' : '';
       const outdatedBadge = ann && ann.outdated ? '<span class="outdated-badge">outdated</span>' : '';
+      const label = start === end ? 'Line ' + end : 'Lines ' + start + '\u2013' + end;
       return `
         <div class="comment-item${outdatedClass}" data-comment-line="${lineNum}">
-          <div class="comment-line">Line ${lineNum} ${outdatedBadge}</div>
+          <div class="comment-line">${label} ${outdatedBadge}</div>
           <div class="comment-text">${escapeHtml(ann ? ann.comment : '')}</div>
         </div>
       `;

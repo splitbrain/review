@@ -49,7 +49,7 @@ func drainEvents(w *Watcher) {
 func TestOwnWriteIsNotReported(t *testing.T) {
 	st, w, _ := newTestWatcher(t)
 
-	if err := st.Set("a.go", 2, "a comment"); err != nil {
+	if err := st.Set("a.go", 2, 2, "a comment"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestForeignWriteIsReported(t *testing.T) {
 func TestOwnDeletionIsNotReported(t *testing.T) {
 	st, w, _ := newTestWatcher(t)
 
-	if err := st.Set("a.go", 2, "a comment"); err != nil {
+	if err := st.Set("a.go", 2, 2, "a comment"); err != nil {
 		t.Fatal(err)
 	}
 	drainEvents(w)
@@ -110,7 +110,7 @@ func TestOwnDeletionIsNotReported(t *testing.T) {
 func TestForeignDeletionIsReported(t *testing.T) {
 	st, w, _ := newTestWatcher(t)
 
-	if err := st.Set("a.go", 2, "a comment"); err != nil {
+	if err := st.Set("a.go", 2, 2, "a comment"); err != nil {
 		t.Fatal(err)
 	}
 	drainEvents(w)
@@ -138,7 +138,7 @@ func TestViewedFileIsReportedWithoutDrift(t *testing.T) {
 	if err := os.WriteFile(path, []byte("l1\nl2\nl3\nl4\nl5\nl6\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Set("a.go", 2, "a comment"); err != nil {
+	if err := st.Set("a.go", 2, 2, "a comment"); err != nil {
 		t.Fatal(err)
 	}
 	w.WatchFile("a.go")
@@ -183,7 +183,7 @@ func TestWatchFileDoesNotAccumulate(t *testing.T) {
 	}
 
 	// An annotated file keeps its directory watched even when another is viewed
-	if err := st.Set("one/f.go", 1, "note"); err != nil {
+	if err := st.Set("one/f.go", 1, 1, "note"); err != nil {
 		t.Fatal(err)
 	}
 	w.WatchFile("a.go")

@@ -267,10 +267,12 @@ func TestFileEndpoint_NonexistentFile(t *testing.T) {
 
 // ---- /api/annotations tests ----
 
-// annotationObj is the new response shape: {comment, outdated}
+// annotationObj is the response shape: {comment, startLine, endLine, outdated}
 type annotationObj struct {
-	Comment  string `json:"comment"`
-	Outdated bool   `json:"outdated"`
+	Comment   string `json:"comment"`
+	StartLine int    `json:"startLine"`
+	EndLine   int    `json:"endLine"`
+	Outdated  bool   `json:"outdated"`
 }
 
 func TestFileEndpoint_BinaryFile(t *testing.T) {
@@ -543,6 +545,78 @@ func TestAnnotations_Delete(t *testing.T) {
 
 	if len(annots) != 0 {
 		t.Errorf("expected empty annotations after delete, got %v", annots)
+	}
+}
+
+func TestAnnotations_SetRange(t *testing.T) {
+	ts, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// A whole-line range in Gerrit's CommentRange shape.
+	body := `{"path":"multiline.txt","line":20,"range":{"start_line":10,"end_line":20},"comment":"These lines belong together"}`
+	resp, err := http.Post(ts.URL+"/api/annotations", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+	}
+
+	resp2, err := http.Get(ts.URL + "/api/annotations?path=multiline.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+
+	var annots map[string]annotationObj
+	if err := json.NewDecoder(resp2.Body).Decode(&annots); err != nil {
+		t.Fatalf("failed to decode annotations: %v", err)
+	}
+
+	// Keyed by the end line, carrying both ends back to the client.
+	got, ok := annots["20"]
+	if !ok {
+		t.Fatalf("expected the annotation keyed by line 20, got %v", annots)
+	}
+	if got.StartLine != 10 || got.EndLine != 20 {
+		t.Errorf("range round-trip: got %d-%d, want 10-20", got.StartLine, got.EndLine)
+	}
+	if got.Comment != "These lines belong together" {
+		t.Errorf("unexpected comment: %q", got.Comment)
+	}
+}
+
+// TestAnnotations_SetRangeReversed checks that a range given with its ends the
+// wrong way round is still stored in order.
+func TestAnnotations_SetRangeReversed(t *testing.T) {
+	ts, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	body := `{"path":"multiline.txt","range":{"start_line":20,"end_line":10},"comment":"reversed"}`
+	resp, err := http.Post(ts.URL+"/api/annotations", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	resp2, err := http.Get(ts.URL + "/api/annotations?path=multiline.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+
+	var annots map[string]annotationObj
+	if err := json.NewDecoder(resp2.Body).Decode(&annots); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	got := annots["20"]
+	if got.StartLine != 10 || got.EndLine != 20 {
+		t.Errorf("reversed range not normalised: got %d-%d", got.StartLine, got.EndLine)
 	}
 }
 

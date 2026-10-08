@@ -211,8 +211,10 @@ body {
   pointer-events: none;
 }
 
+/* Lines of a range share one left bar so the run reads as a single block. */
 .code-content .chroma .line.selected {
   background: rgba(37, 99, 235, 0.12);
+  box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.55);
 }
 
 /* Diff line highlighting — gutter marker only, no background */

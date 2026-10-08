@@ -94,10 +94,13 @@ func (h *handlers) handleFile(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, resp)
 }
 
-// annotationResponse is the JSON shape of a single annotation.
+// annotationResponse is the JSON shape of a single annotation, keyed in a file's
+// map by its end line.
 type annotationResponse struct {
-	Comment  string `json:"comment"`
-	Outdated bool   `json:"outdated"`
+	Comment   string `json:"comment"`
+	StartLine int    `json:"startLine"` // first line the comment covers
+	EndLine   int    `json:"endLine"`   // last line the comment covers
+	Outdated  bool   `json:"outdated"`
 }
 
 // fileAnnotations converts one file's annotations into the shape clients
@@ -106,8 +109,10 @@ func fileAnnotations(anns map[int]*store.Annotation) map[string]annotationRespon
 	result := make(map[string]annotationResponse, len(anns))
 	for line, ann := range anns {
 		result[strconv.Itoa(line)] = annotationResponse{
-			Comment:  ann.Comment,
-			Outdated: ann.Outdated,
+			Comment:   ann.Comment,
+			StartLine: ann.StartFor(line),
+			EndLine:   line,
+			Outdated:  ann.Outdated,
 		}
 	}
 	return result
@@ -133,9 +138,38 @@ func (h *handlers) handleGetAnnotations(w http.ResponseWriter, r *http.Request) 
 }
 
 type annotationRequest struct {
-	Path    string `json:"path"`
-	Line    int    `json:"line"`
-	Comment string `json:"comment"`
+	Path    string       `json:"path"`
+	Line    int          `json:"line"`
+	Range   *rangeEntity `json:"range,omitempty"`
+	Comment string       `json:"comment"`
+}
+
+// rangeEntity mirrors the fields of Gerrit's CommentRange that a whole-line
+// comment uses. The character offsets alone are ignored: this tool comments on
+// whole lines, so a range is always a run of lines.
+type rangeEntity struct {
+	StartLine int `json:"start_line"`
+	EndLine   int `json:"end_line"`
+}
+
+// lineRange returns the first and last line the request covers, in that order.
+// A range, when given, wins over the single line field, and its end line is the
+// line the annotation is keyed by, as in Gerrit.
+func (r annotationRequest) lineRange() (start, end int, ok bool) {
+	start, end = r.Line, r.Line
+	if r.Range != nil {
+		start, end = r.Range.StartLine, r.Range.EndLine
+		if start < 1 {
+			start = end
+		}
+	}
+	if start > end {
+		start, end = end, start
+	}
+	if start < 1 || end < 1 {
+		return 0, 0, false
+	}
+	return start, end, true
 }
 
 func (h *handlers) handleSetAnnotation(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +179,8 @@ func (h *handlers) handleSetAnnotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Path == "" || req.Line < 1 {
+	start, end, ok := req.lineRange()
+	if req.Path == "" || !ok {
 		jsonError(w, "path and line (>= 1) are required", http.StatusBadRequest)
 		return
 	}
@@ -158,7 +193,7 @@ func (h *handlers) handleSetAnnotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.Set(req.Path, req.Line, req.Comment); err != nil {
+	if err := h.store.Set(req.Path, start, end, req.Comment); err != nil {
 		jsonError(w, fmt.Sprintf("failed to save: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -173,7 +208,8 @@ func (h *handlers) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if req.Path == "" || req.Line < 1 {
+	_, end, ok := req.lineRange()
+	if req.Path == "" || !ok {
 		jsonError(w, "path and line (>= 1) are required", http.StatusBadRequest)
 		return
 	}
@@ -182,7 +218,7 @@ func (h *handlers) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.store.Delete(req.Path, req.Line); err != nil {
+	if err := h.store.Delete(req.Path, end); err != nil {
 		jsonError(w, fmt.Sprintf("failed to delete: %v", err), http.StatusInternalServerError)
 		return
 	}

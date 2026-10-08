@@ -15,17 +15,34 @@ import (
 const ContextRadius = 3
 
 // Annotation holds a review comment with its source context.
+//
+// A comment can cover a range of lines. It is keyed by the last line of that
+// range, which is what the line header names, and StartLine holds the first.
+// A comment on a single line has StartLine equal to its key, the same shape
+// Gerrit's CommentRange takes for a one-line comment.
 type Annotation struct {
 	Comment     string   `json:"comment"`
-	Context     []string `json:"-"`        // stored context lines (without line-number prefix)
-	ContextFrom int      `json:"-"`        // first line number of context block
-	Outdated    bool     `json:"outdated"` // true if context no longer matches source
+	StartLine   int      `json:"startLine"` // first line of the range (1-based)
+	Context     []string `json:"-"`         // stored context lines (without line-number prefix)
+	ContextFrom int      `json:"-"`         // first line number of context block
+	Outdated    bool     `json:"outdated"`  // true if context no longer matches source
+}
+
+// StartFor returns the first line an annotation covers, given the end line it
+// is keyed by. An annotation written before ranges were recorded carries no
+// start line, and covers the end line alone.
+func (a *Annotation) StartFor(endLine int) int {
+	if a.StartLine >= 1 && a.StartLine <= endLine {
+		return a.StartLine
+	}
+	return endLine
 }
 
 // equal reports whether two annotations describe the same comment on the same
 // piece of code.
 func (a *Annotation) equal(b *Annotation) bool {
 	return a.Comment == b.Comment &&
+		a.StartLine == b.StartLine &&
 		a.Outdated == b.Outdated &&
 		a.ContextFrom == b.ContextFrom &&
 		slices.Equal(a.Context, b.Context)
@@ -84,20 +101,24 @@ func (s *Store) notifyChange() {
 	}
 }
 
-// Set adds or updates a comment on a specific file and line. The surrounding
-// source lines are recorded with it so the annotation can be followed when the
-// code later moves.
-func (s *Store) Set(file string, line int, comment string) error {
+// Set adds or updates a comment on a specific file and line range. The
+// surrounding source lines are recorded with it so the annotation can be
+// followed when the code later moves. The annotation is keyed by endLine, so a
+// comment set with the same end line replaces the previous one.
+func (s *Store) Set(file string, startLine, endLine int, comment string) error {
 	s.mu.Lock()
 
 	if s.data[file] == nil {
 		s.data[file] = make(map[int]*Annotation)
 	}
-	ann := &Annotation{Comment: strings.TrimSpace(comment)}
-	if lines, err := readFileLines(s.srcRoot, file); err == nil {
-		ann.Context, ann.ContextFrom = contextAround(lines, line, ContextRadius)
+	ann := &Annotation{
+		Comment:   strings.TrimSpace(comment),
+		StartLine: startLine,
 	}
-	s.data[file][line] = ann
+	if lines, err := readFileLines(s.srcRoot, file); err == nil {
+		ann.Context, ann.ContextFrom = contextAroundRange(lines, startLine, endLine, ContextRadius)
+	}
+	s.data[file][endLine] = ann
 	err := s.flush()
 	s.mu.Unlock()
 

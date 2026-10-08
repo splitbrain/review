@@ -15,11 +15,16 @@ const contextMarker = "context"
 
 var (
 	fileHeaderRe  = regexp.MustCompile("^## `(.+)`$")
-	lineHeaderRe  = regexp.MustCompile(`^#### Line (\d+)(.*)$`)
+	singleLineRe  = regexp.MustCompile(`^#### Line (\d+)(.*)$`)
+	rangeLineRe   = regexp.MustCompile(`^#### Lines (\d+)-(\d+)(.*)$`)
 	contextLineRe = regexp.MustCompile(`^(\d+):(?: (.*))?$`)
 	startedRe     = regexp.MustCompile(`^_Started: (.+)_$`)
 	fenceRe       = regexp.MustCompile("^(`{3,}|~{3,})")
 )
+
+// lineHeaderRe matches either form of line heading, so a structural check
+// covers both without repeating them.
+var lineHeaderRe = regexp.MustCompile(`^#### Lines? `)
 
 // parse reads a REVIEW.md file and returns the annotation map together with
 // the date the review was started, which is empty for a file that does not
@@ -49,6 +54,7 @@ func parse(path string) (map[string]map[int]*Annotation, string, error) {
 		started     string
 		currentFile string
 		currentLine int
+		startLine   int
 		outdated    bool
 		body        []string
 		collecting  bool
@@ -64,6 +70,7 @@ func parse(path string) (map[string]map[int]*Annotation, string, error) {
 		if comment != "" && currentFile != "" {
 			data[currentFile][currentLine] = &Annotation{
 				Comment:     comment,
+				StartLine:   startLine,
 				Context:     context,
 				ContextFrom: contextFrom,
 				Outdated:    outdated,
@@ -92,9 +99,18 @@ func parse(path string) (map[string]map[int]*Annotation, string, error) {
 			continue
 		}
 
-		if m := lineHeaderRe.FindStringSubmatch(line); m != nil && currentFile != "" {
+		if m := rangeLineRe.FindStringSubmatch(line); m != nil && currentFile != "" {
+			save()
+			currentLine, _ = strconv.Atoi(m[2])
+			startLine, _ = strconv.Atoi(m[1])
+			outdated = strings.Contains(m[3], "outdated")
+			collecting = true
+			continue
+		}
+		if m := singleLineRe.FindStringSubmatch(line); m != nil && currentFile != "" {
 			save()
 			currentLine, _ = strconv.Atoi(m[1])
+			startLine = currentLine
 			outdated = strings.Contains(m[2], "outdated")
 			collecting = true
 			continue

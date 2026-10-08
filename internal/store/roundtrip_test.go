@@ -31,7 +31,7 @@ func TestRoundTrip_MarkdownInComment(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := st.Set("a.go", 3, comment); err != nil {
+			if err := st.Set("a.go", 3, 3, comment); err != nil {
 				t.Fatal(err)
 			}
 
@@ -60,9 +60,9 @@ func TestRoundTrip_MultipleAnnotations(t *testing.T) {
 	mdPath := filepath.Join(dir, "REVIEW.md")
 
 	st, _ := Load(mdPath, dir)
-	st.Set("a.go", 1, "first\n\n```\n#### Line 42\n```")
-	st.Set("a.go", 4, "second")
-	st.Set("b.go", 2, "third\n---")
+	st.Set("a.go", 1, 1, "first\n\n```\n#### Line 42\n```")
+	st.Set("a.go", 4, 4, "second")
+	st.Set("b.go", 2, 2, "third\n---")
 
 	reloaded, _ := Load(mdPath, dir)
 	if got := len(reloaded.data); got != 2 {
@@ -102,7 +102,7 @@ func TestRoundTrip_LongLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Set("bundle.js", 2, "this line is huge"); err != nil {
+	if err := st.Set("bundle.js", 2, 2, "this line is huge"); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(st.data["bundle.js"][2].Context); got != 3 {
@@ -135,7 +135,7 @@ func TestSerialize_CommentStaysPlainText(t *testing.T) {
 		t.Fatal(err)
 	}
 	comment := "Prefer a logger:\n\n```go\nlog.Println(\"hi\")\n```\n\nIt keeps output consistent."
-	if err := st.Set("a.go", 3, comment); err != nil {
+	if err := st.Set("a.go", 3, 3, comment); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +157,7 @@ func TestSerialize_EscapesOnlyHeadingLines(t *testing.T) {
 
 	st, _ := Load(mdPath, dir)
 	comment := "See below.\n\n#### Line 99\n\nA sample:\n\n```md\n#### Line 42\n```"
-	if err := st.Set("a.go", 2, comment); err != nil {
+	if err := st.Set("a.go", 2, 2, comment); err != nil {
 		t.Fatal(err)
 	}
 
@@ -217,8 +217,8 @@ func TestSerialize_ContextFenceIsMarked(t *testing.T) {
 	mdPath := filepath.Join(dir, "REVIEW.md")
 
 	st, _ := Load(mdPath, dir)
-	st.Set("a.go", 2, "a note")
-	st.Set("notes.unknownext", 2, "another note")
+	st.Set("a.go", 2, 2, "a note")
+	st.Set("notes.unknownext", 2, 2, "another note")
 
 	written := mustRead(t, mdPath)
 	if !strings.Contains(written, "```go context\n") {
@@ -238,7 +238,7 @@ func TestRoundTrip_CommentEndingInNumberedBlock(t *testing.T) {
 
 	comment := "The numbering is off here:\n\n```\n1: first\n2: second\n```"
 	st, _ := Load(mdPath, dir)
-	if err := st.Set("a.go", 3, comment); err != nil {
+	if err := st.Set("a.go", 3, 3, comment); err != nil {
 		t.Fatal(err)
 	}
 

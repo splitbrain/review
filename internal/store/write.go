@@ -52,11 +52,7 @@ func serialize(data map[string]map[int]*Annotation, started string) string {
 
 		for _, lineNum := range lineNums {
 			ann := lines[lineNum]
-			if ann.Outdated {
-				b.WriteString(fmt.Sprintf("\n#### Line %d (outdated)\n\n", lineNum))
-			} else {
-				b.WriteString(fmt.Sprintf("\n#### Line %d\n\n", lineNum))
-			}
+			b.WriteString("\n#### " + lineHeader(ann, lineNum) + "\n\n")
 			b.WriteString(escapeComment(ann.Comment))
 
 			if len(ann.Context) > 0 {
@@ -68,6 +64,21 @@ func serialize(data map[string]map[int]*Annotation, started string) string {
 	}
 
 	return b.String()
+}
+
+// lineHeader renders the heading text naming the lines an annotation covers,
+// without the heading's own hashes. A comment on a range names its first and
+// last line; a single-line one keeps the "Line N" form, so a review file
+// written before ranges existed still reads the same.
+func lineHeader(ann *Annotation, endLine int) string {
+	header := fmt.Sprintf("Line %d", endLine)
+	if ann.StartLine > 0 && ann.StartLine != endLine {
+		header = fmt.Sprintf("Lines %d-%d", ann.StartLine, endLine)
+	}
+	if ann.Outdated {
+		header += " (outdated)"
+	}
+	return header
 }
 
 // escapeComment writes a comment as the reviewer wrote it. Only a line that
@@ -118,14 +129,29 @@ func formatContext(lines []string, from int) string {
 // contextAround returns the lines surrounding lineNum together with the line
 // number the block starts at. Line numbers are 1-based.
 func contextAround(lines []string, lineNum, radius int) ([]string, int) {
-	if lineNum < 1 || lineNum > len(lines) {
+	return contextAroundRange(lines, lineNum, lineNum, radius)
+}
+
+// contextAroundRange returns the lines surrounding the range startLine..endLine
+// together with the line number the block starts at. A range wider than the
+// context it is stored with keeps at least its own lines, so a long comment is
+// recognised by the code it covers rather than only its edges. Line numbers are
+// 1-based.
+func contextAroundRange(lines []string, startLine, endLine, radius int) ([]string, int) {
+	if startLine > endLine {
+		startLine, endLine = endLine, startLine
+	}
+	if startLine < 1 || startLine > len(lines) {
 		return nil, 0
 	}
-	start := lineNum - radius
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+	start := startLine - radius
 	if start < 1 {
 		start = 1
 	}
-	end := lineNum + radius
+	end := endLine + radius
 	if end > len(lines) {
 		end = len(lines)
 	}

@@ -241,7 +241,7 @@ func TestCheckDrift_RelocatesToNearestCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Comment on the second copy's body
-	if err := st.Set("test.go", 5, "the second one"); err != nil {
+	if err := st.Set("test.go", 5, 5, "the second one"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -279,7 +279,7 @@ func TestOnChange_NoDeadlock(t *testing.T) {
 
 	// These will deadlock (and the test will time out) if notifyChange
 	// is called while the write lock is still held.
-	if err := st.Set("test.go", 1, "comment"); err != nil {
+	if err := st.Set("test.go", 1, 1, "comment"); err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
 	if err := st.Delete("test.go", 1); err != nil {
@@ -308,7 +308,7 @@ func TestCheckDrift_OutdatedSurvivesReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Set("test.go", 4, "look at this"); err != nil {
+	if err := st.Set("test.go", 4, 4, "look at this"); err != nil {
 		t.Fatal(err)
 	}
 

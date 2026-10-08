@@ -77,11 +77,13 @@ func (s *Store) checkDrift(filePath string) bool {
 	var relocations []relocation
 
 	for lineNum, ann := range annotations {
+		start := ann.StartFor(lineNum)
 		if len(ann.Context) == 0 {
 			// Nothing recorded to compare against, as in files written before
 			// the context was stored: adopt the current source as reference.
-			if ctx, from := contextAround(fileLines, lineNum, ContextRadius); len(ctx) > 0 {
+			if ctx, from := contextAroundRange(fileLines, start, lineNum, ContextRadius); len(ctx) > 0 {
 				ann.Context, ann.ContextFrom = ctx, from
+				ann.StartLine = start
 				changed = true
 			}
 			continue
@@ -105,6 +107,10 @@ func (s *Store) checkDrift(filePath string) bool {
 			newLine := lineNum + delta
 			if newLine >= 1 {
 				ann.ContextFrom = newFrom
+				ann.StartLine += delta
+				if ann.StartLine < 1 {
+					ann.StartLine = newLine
+				}
 				ann.Outdated = false
 				if newLine != lineNum {
 					relocations = append(relocations, relocation{

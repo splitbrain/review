@@ -150,7 +150,7 @@ func TestParse_StartedPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Set("test.go", 2, "new comment"); err != nil {
+	if err := st.Set("test.go", 2, 2, "new comment"); err != nil {
 		t.Fatal(err)
 	}
 
